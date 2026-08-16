@@ -638,6 +638,7 @@ async function lookupPlate(raw) {
         make: prior.make, model: prior.model, variant: prior.variant, year: prior.year,
         fuel: prior.fuel, transmission: prior.transmission, engine: prior.engine,
         colour: prior.colour, doors: prior.doors, body: prior.body,
+        motTests: prior.motTests,
       },
     };
   }
@@ -645,29 +646,37 @@ async function lookupPlate(raw) {
   try {
     if (plateServiceOffline) throw new Error('lookup unavailable');
     const res = await fetch('/api/plate?reg=' + encodeURIComponent(plate));
-    // A 501 (no key set) or 404 (function not deployed) will not change on the
-    // next plate, so stop asking for the rest of the session.
+    // A 501 (nothing configured) or 404 (function not deployed) will not change
+    // on the next plate, so stop asking for the rest of the session.
     if (res.status === 501 || res.status === 404) plateServiceOffline = true;
     if (res.ok) {
       const v = await res.json();
-      if (v.make) {
-        const title = (s) => s ? s.charAt(0) + s.slice(1).toLowerCase() : '';
+      if (v.make || v.model) {
+        const services = [];
+        if (v.sources.includes('dvla')) services.push('DVLA');
+        if (v.sources.includes('mot')) services.push('MOT history');
+
+        const facts = [[v.make, v.model].filter(Boolean).join(' '), v.year, v.colour, v.fuel,
+          v.engine ? v.engine + 'cc' : '',
+          v.taxStatus ? 'Tax: ' + v.taxStatus : '',
+          v.motStatus ? 'MOT: ' + v.motStatus : ''].filter(Boolean).join(' · ');
+
+        const odo = v.lastOdometer
+          ? ` Last MOT reading was ${num(v.lastOdometer)} miles in ${fmtDate(v.lastOdometerDate)} — I have used that as the mileage, correct it to today's figure.`
+          : ' Add the mileage below.';
+
         return {
-          plate, source: 'dvla', sourceLabel: 'Found at the DVLA',
-          note: [title(v.make), v.yearOfManufacture, title(v.colour), title(v.fuelType),
-                 v.engineCapacity ? v.engineCapacity + 'cc' : '',
-                 v.taxStatus ? 'Tax: ' + v.taxStatus : '',
-                 v.motStatus ? 'MOT: ' + v.motStatus : ''].filter(Boolean).join(' · ') +
-                '. Add the model and mileage below.',
+          plate, source: 'api', sourceLabel: 'Found at the ' + services.join(' and '),
+          note: facts + '.' + odo,
           data: {
-            make: title(v.make), year: v.yearOfManufacture, colour: title(v.colour),
-            fuel: title(v.fuelType), engine: v.engineCapacity,
-            motExpiry: v.motExpiryDate || '',
+            make: v.make, model: v.model, year: v.year, colour: v.colour,
+            fuel: v.fuel, engine: v.engine, motExpiry: v.motExpiry,
+            mileage: v.lastOdometer, motTests: v.motTests,
           },
         };
       }
     }
-  } catch { /* no function deployed, or offline — fall through */ }
+  } catch { /* nothing configured, or offline — fall through */ }
 
   return {
     plate, source: 'offline', sourceLabel: 'Read from the plate',
@@ -804,6 +813,12 @@ function priceAdvice(v) {
   if (Number(v.owners) === 1) { factor += 0.02; reasons.push('One previous owner is a genuine selling point.'); }
   if (v.serviceHistory === 'full') { factor += 0.03; reasons.push('Full service history is one of the strongest trust signals in a listing.'); }
   else if (v.serviceHistory === 'none') { factor -= 0.05; reasons.push('No service history — be ready to justify the price.'); }
+
+  const advisories = v.motTests?.[0]?.advisories || [];
+  if (advisories.length) {
+    factor -= Math.min(0.04, advisories.length * 0.015);
+    reasons.push(`${advisories.length} advisor${advisories.length === 1 ? 'y' : 'ies'} on the last MOT — a buyer can read those online before they ring you, so either fix them or price them in.`);
+  }
 
   const days = v.createdAt ? daysBetween(v.createdAt) : 0;
   if (days > 60) { factor -= 0.05; reasons.push(`This car has been in stock ${days} days. Aged stock ties up cash — a visible price move usually beats waiting.`); }
@@ -1123,6 +1138,13 @@ function dailyBriefing() {
 
   const thin = cars.filter(v => !v.description);
   if (thin.length) lines.push(`• ${thin.length} listing${thin.length > 1 ? 's have' : ' has'} no description — open the car and hit "Write listing" to generate one.`);
+
+  const motSoon = cars.filter(v => v.motExpiry &&
+    new Date(v.motExpiry) - Date.now() < 60 * 86400000 && new Date(v.motExpiry) > Date.now());
+  if (motSoon.length) lines.push(`• ${motSoon.length} car${motSoon.length > 1 ? 's have' : ' has'} an MOT expiring within 60 days — ${motSoon.slice(0, 3).map(carName).join(', ')}. Buyers ask, and a fresh certificate sells.`);
+
+  const advisories = cars.filter(v => v.motTests?.[0]?.advisories?.length);
+  if (advisories.length) lines.push(`• ${advisories.length} car${advisories.length > 1 ? 's carry' : ' carries'} advisories from its last MOT. Fix them or price them in before a buyer reads the certificate.`);
 
   const stale = myLeads().filter(l => !['won', 'lost'].includes(l.stage) && daysBetween(l.lastContactAt || l.createdAt) >= 3);
   if (stale.length) lines.push(`• ${stale.length} enquir${stale.length > 1 ? 'ies have' : 'y has'} gone quiet for 3+ days. A follow-up call converts more than a new advert.`);
@@ -1507,7 +1529,7 @@ function paintWizard(root) {
       colour: d.colour || '', doors: Number(d.doors) || null, owners: Number(d.owners) || null,
       motExpiry: d.motExpiry || '', serviceHistory: d.serviceHistory || '',
       condition: d.condition || 'good', conditionNotes: d.conditionNotes || '',
-      features: d.features || [], photos: d.photos || [],
+      features: d.features || [], photos: d.photos || [], motTests: d.motTests || [],
       purchasePrice: Number(d.purchasePrice) || null,
       askingPrice: Number(d.askingPrice) || null,
       soldPrice: null, description: '', status: 'in_stock',
@@ -1620,6 +1642,8 @@ function viewVehicle(id) {
             <button class="btn btn-sm" id="v-desc-copy">Copy</button>
           </div>
         </section>
+
+        ${motHistoryPanel(v)}
 
         <section class="card pad">
           <div class="row-between" style="margin-bottom:.8rem">
@@ -1761,6 +1785,62 @@ function viewVehicle(id) {
   $('#v-log-call').onclick = () => logEventDialog(v, 'call');
   $('#v-log-other').onclick = () => logEventDialog(v, 'enquiry');
   $('#v-edit').onclick = () => editVehicleDialog(v);
+}
+
+/*
+   MOT history, straight from DVSA. The odometer readings are the useful part:
+   a mileage that climbs steadily is a car that was used normally, and a year
+   that barely moves is a question a buyer will eventually ask.
+*/
+function motHistoryPanel(v) {
+  const tests = (v.motTests || []).filter(t => t.date);
+  if (!tests.length) return '';
+
+  const withOdo = tests.filter(t => t.odometer);
+  const maxOdo = Math.max(1, ...withOdo.map(t => t.odometer));
+  const recent = tests[0];
+  const advisories = recent.advisories || [];
+
+  // Average miles a year across the readings we have.
+  let perYear = null;
+  if (withOdo.length >= 2) {
+    const first = withOdo[withOdo.length - 1], last = withOdo[0];
+    const years = (new Date(last.date) - new Date(first.date)) / (365.25 * 86400000);
+    if (years > 0.5) perYear = Math.round((last.odometer - first.odometer) / years);
+  }
+
+  return `
+    <section class="card pad">
+      <div class="row-between" style="margin-bottom:.2rem">
+        <h3>MOT history</h3>
+        <span class="pill pill-${recent.result === 'PASSED' ? 'in_stock' : 'reserved'}">
+          ${recent.result === 'PASSED' ? 'Last test passed' : 'Last test failed'}</span>
+      </div>
+      <p class="small muted" style="margin-bottom:.9rem">
+        ${tests.length} test${tests.length === 1 ? '' : 's'} on record${
+          perYear ? ` · averaging ${num(perYear)} miles a year` : ''}.
+      </p>
+
+      ${withOdo.length ? `<div class="bars">${withOdo.map(t => `
+        <div class="bar-row" title="${fmtDate(t.date)}: ${num(t.odometer)} miles">
+          <span class="name">${fmtDate(t.date)}${t.result === 'PASSED' ? '' : ' · failed'}</span>
+          <span class="bar-track"><span class="bar-fill" style="width:${Math.max(2, (t.odometer / maxOdo) * 100)}%${
+            t.result === 'PASSED' ? '' : ';background:var(--series-2)'}"></span></span>
+          <span class="val">${num(t.odometer)}</span>
+        </div>`).join('')}</div>`
+        : '<p class="small muted">No odometer readings recorded.</p>'}
+
+      ${advisories.length ? `
+        <div style="margin-top:1rem;border-top:1px solid var(--line);padding-top:.8rem">
+          <h4 class="small" style="margin-bottom:.4rem">Advisories at the last test</h4>
+          <ul class="small muted" style="margin:0;padding-left:1.1rem;line-height:1.5">
+            ${advisories.slice(0, 6).map(a => `<li>${esc(a)}</li>`).join('')}
+          </ul>
+          <p class="small" style="margin-top:.6rem">
+            Sort these before a buyer finds them, or price them in.
+          </p>
+        </div>` : ''}
+    </section>`;
 }
 
 const EVENT_LABEL = {

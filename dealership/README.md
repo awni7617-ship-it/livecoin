@@ -54,32 +54,61 @@ When you type a registration the app tries three sources, best first.
 **1. Cars you have had before.** Instant, exact, works offline, nothing to set
 up. Enter a plate that has been on your forecourt and everything comes back.
 
-**2. The DVLA.** Free, official, and gives you make, colour, fuel, engine size,
-year of manufacture, MOT status and expiry, and tax status. It does **not**
-return the model — DVLA simply does not hold it — so the model box stays.
+**2. Two free government services, merged.** Neither knows enough alone:
 
-This one needs setting up, because the DVLA key must never sit in a web page and
-their API cannot be called from a browser at all. `functions/api/plate.js` in
-this folder is a Cloudflare Pages Function that makes the call server-side.
-Cloudflare picks it up automatically when you deploy the folder.
+| | DVLA | DVSA MOT history |
+|---|---|---|
+| Make, colour, fuel, engine size | ✅ | ✅ |
+| Year of manufacture | ✅ | ✅ |
+| **Model** | ❌ never held | ✅ |
+| Tax status | ✅ | ❌ |
+| MOT status and expiry | ✅ | ✅ |
+| **Odometer reading at every MOT** | ❌ | ✅ |
+| **Advisories and failures** | ❌ | ✅ |
 
-1. Get a free key at
-   [developer-portal.driver-vehicle-licensing.api.gov.uk](https://developer-portal.driver-vehicle-licensing.api.gov.uk)
-2. Pages project → **Settings** → **Variables and secrets** → add a secret named
-   `DVLA_API_KEY`
-3. Redeploy
+Together they fill in everything except trim, mileage *today* and condition.
+The last MOT odometer reading is used as the opening mileage figure, so usually
+you are just correcting it upward.
 
-Deploying `index.html` on its own is still fine — you just do not get step 2.
+Both need setting up, because the keys must never sit in a web page and neither
+API can be called from a browser at all. `functions/api/plate.js` is a
+Cloudflare Pages Function that makes both calls server-side and merges them.
+Cloudflare picks it up automatically when you deploy this folder.
+
+**DVLA** — register at
+[developer-portal.driver-vehicle-licensing.api.gov.uk](https://developer-portal.driver-vehicle-licensing.api.gov.uk),
+then add one secret:
+
+- `DVLA_API_KEY`
+
+**MOT history** — register at
+[documentation.history.mot.api.gov.uk](https://documentation.history.mot.api.gov.uk).
+They email you three values, which become three secrets:
+
+- `MOT_CLIENT_ID`
+- `MOT_CLIENT_SECRET`
+- `MOT_API_KEY`
+
+Add them under Pages project → **Settings** → **Variables and secrets**, then
+redeploy. Either service works without the other — whatever is configured gets
+used. Deploying `index.html` on its own is still fine; you just fall through to
+source 3.
+
+Once MOT history is on, each vehicle page grows an **MOT history** panel: the
+odometer at every test as a bar chart, the average miles a year calculated from
+it, failed tests marked, and the advisories from the most recent test. Those
+advisories also feed the price advice and the dashboard briefing — a buyer can
+read them online before they ring you, so it is better to know first.
 
 **3. The plate itself.** With no lookup configured, the registration is still
 decoded offline: the year from the age identifier (`AB12` → March 2012, `AB62` →
 September 2012) and the issuing office from the first letter (`L` → London,
 `S` → Scotland). Everything else you fill in once, on the same screen.
 
-There is no free service anywhere that turns a UK plate into a full make, model
-and trim without a key — the paid providers (UK Vehicle Data, VehicleDataGlobal
-and similar) are the only route to the model, and they all charge per lookup. If
-you want one of those wired in later, it is a small change to the same function.
+What still cannot be looked up anywhere, at any price: **today's mileage** and
+**condition**. The trim level (ST-Line, GT, Sport) is only sold commercially, by
+providers like UK Vehicle Data and VehicleDataGlobal, at a few pence per lookup —
+wiring one in is a small change to the same function if you ever want it.
 
 ## The AI
 
