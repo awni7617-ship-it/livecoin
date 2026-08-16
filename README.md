@@ -40,8 +40,13 @@ preset, no build command, no environment variables.
 | Jump, double jump, flip | **JUMP** | `Space` | A |
 | Powerslide / air roll | **AIR ROLL** | `Q` | X |
 | Ball cam | **BALL CAM** | `C` | Y |
-| Pause | HUD button | `Esc` | — |
-| Reset ball (free play) | **RESET BALL** | `R` | — |
+| Pause | HUD button | `Esc` | Start |
+| Reset ball (free play) | **RESET BALL** | `R` | Back |
+| Air roll left / right | — | — | LB / RB |
+
+On a controller, **RT** is throttle and **LT** is reverse, so the left stick is free to aim.
+Every menu is playable on the pad — stick or d-pad to move, **A** to choose, **B** to go back —
+rumble follows the action, and the touch buttons hide themselves once a pad is in use.
 
 Tap jump a second time while airborne with the stick pushed to **flip** — a flip into the ball
 is the hardest shot in the game. Hold jump for a higher launch; tap it for a quick hop. Hold
@@ -70,9 +75,12 @@ useful launch instead of a feeble hop).
 - **Cars** — six chassis built from lofted superellipse cross-sections with smooth normals:
   sculpted shells, canopies, splitters, skirts, spoilers, rocket nozzles, emissive head and
   tail lights, spoked rims, team stripes. Ten paints, five wheel finishes, six boost trails.
-- **Arena** — the octagonal 8192 × 10240 × 2044 pitch with rounded floor-to-wall transitions,
-  goal tunnels and netting, a hanging four-sided jumbotron mirroring the live score and clock,
-  animated LED ribbon boards in team colours, brushed-metal trim, floodlights and crowd tiers.
+- **Stadium** — the octagonal 8192 × 10240 × 2044 pitch with rounded floor-to-wall transitions
+  and goal tunnels, wrapped in a real seating bowl: twelve stepped rows of spectators with
+  stairways between blocks, home ends in team colours, a front rail and a closed back wall.
+  Above it, an exposed roof truss carrying floodlight banks, a hanging four-sided jumbotron
+  mirroring the live score and clock, animated LED ribbon boards, safety-glass mullions,
+  corner pylons, lit concourse arches and team-coloured wash inside each goal.
 - **Feel** — hit-stop on your heavy strikes, screen flash on goals, FOV that widens under
   boost, camera bank into corners, impact shockwave rings, tyre smoke while powersliding,
   a comet trail on a fast ball, landing dust, sparks, and haptics.
@@ -81,9 +89,12 @@ useful launch instead of a feeble hop).
   a stadium goal horn, and save cues. No audio files — it is all generated at runtime.
 - **Presentation** — procedural textures, batched textured particles, minimap, goal replays
   with a cinematic orbit camera.
+- **Controller** — full standard-gamepad mapping with a radial deadzone and expo curve,
+  trigger throttle, air roll left/right, gamepad-driven menus with a focus ring, dual-rumble
+  haptics, and hot plug/unplug detection.
 - **Options** — camera (FOV, distance, height, stiffness, ball cam), controls (left/right hand
-  layout, button size, sensitivity, auto throttle, invert air pitch, vibration), audio, and
-  quality with adaptive resolution.
+  layout, button size, sensitivity, stick deadzone, auto throttle, invert air pitch,
+  vibration), audio, and quality with adaptive resolution.
 
 ## Notes
 
