@@ -1,0 +1,2472 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Forecourt — Dealership Stock &amp; Enquiry Manager</title>
+<meta name="description" content="Add a car by number plate, answer a few guided questions, and track price, calls, enquiries and profit. Built for car dealerships.">
+<meta name="color-scheme" content="light dark">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%9A%97%3C/text%3E%3C/svg%3E">
+<style>
+/* ============================================================
+   Design tokens
+   ============================================================ */
+:root {
+  color-scheme: light;
+  --page:        #f4f4f1;
+  --surface:     #fcfcfb;
+  --surface-2:   #f0efec;
+  --ink:         #0b0b0b;
+  --ink-2:       #52514e;
+  --muted:       #898781;
+  --line:        #e1e0d9;
+  --line-strong: #c3c2b7;
+  --brand:       #184f95;
+  --brand-ink:   #ffffff;
+  --brand-soft:  #cde2fb;
+  --series-1:    #2a78d6;
+  --series-2:    #eb6834;
+  --series-3:    #1baf7a;
+  --good:        #0ca30c;
+  --good-text:   #006300;
+  --warning:     #fab219;
+  --serious:     #ec835a;
+  --critical:    #d03b3b;
+  --ring:        rgba(11,11,11,.10);
+  --shadow:      0 1px 2px rgba(11,11,11,.05), 0 8px 24px -12px rgba(11,11,11,.18);
+  --radius:      12px;
+  --radius-sm:   8px;
+  --font:        system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --page:        #0d0d0d;
+    --surface:     #1a1a19;
+    --surface-2:   #232322;
+    --ink:         #ffffff;
+    --ink-2:       #c3c2b7;
+    --muted:       #898781;
+    --line:        #2c2c2a;
+    --line-strong: #383835;
+    --brand:       #3987e5;
+    --brand-ink:   #06121f;
+    --brand-soft:  #16324f;
+    --series-1:    #3987e5;
+    --series-2:    #d95926;
+    --series-3:    #199e70;
+    --good-text:   #0ca30c;
+    --ring:        rgba(255,255,255,.10);
+    --shadow:      0 1px 2px rgba(0,0,0,.4), 0 8px 24px -12px rgba(0,0,0,.7);
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --page:        #0d0d0d;
+  --surface:     #1a1a19;
+  --surface-2:   #232322;
+  --ink:         #ffffff;
+  --ink-2:       #c3c2b7;
+  --muted:       #898781;
+  --line:        #2c2c2a;
+  --line-strong: #383835;
+  --brand:       #3987e5;
+  --brand-ink:   #06121f;
+  --brand-soft:  #16324f;
+  --series-1:    #3987e5;
+  --series-2:    #d95926;
+  --series-3:    #199e70;
+  --good-text:   #0ca30c;
+  --ring:        rgba(255,255,255,.10);
+  --shadow:      0 1px 2px rgba(0,0,0,.4), 0 8px 24px -12px rgba(0,0,0,.7);
+}
+
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  margin: 0;
+  font-family: var(--font);
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--ink);
+  background: var(--page);
+  -webkit-font-smoothing: antialiased;
+}
+h1,h2,h3,h4 { margin: 0; font-weight: 650; letter-spacing: -.01em; line-height: 1.25; }
+h1 { font-size: 1.5rem; }
+h2 { font-size: 1.15rem; }
+h3 { font-size: 1rem; }
+p { margin: 0; }
+a { color: var(--brand); }
+button, input, select, textarea { font: inherit; color: inherit; }
+[hidden] { display: none !important; }
+
+/* ============================================================
+   Primitives
+   ============================================================ */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: .5rem;
+  padding: .55rem .95rem; border-radius: var(--radius-sm);
+  border: 1px solid var(--line-strong); background: var(--surface); color: var(--ink);
+  font-weight: 550; cursor: pointer; white-space: nowrap;
+  transition: background .12s ease, border-color .12s ease, transform .06s ease;
+}
+.btn:hover { background: var(--surface-2); }
+.btn:active { transform: translateY(1px); }
+.btn:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, a:focus-visible {
+  outline: 2px solid var(--brand); outline-offset: 2px;
+}
+.btn-primary { background: var(--brand); border-color: var(--brand); color: var(--brand-ink); }
+.btn-primary:hover { filter: brightness(1.08); background: var(--brand); }
+.btn-ghost { border-color: transparent; background: transparent; }
+.btn-ghost:hover { background: var(--surface-2); }
+.btn-danger { color: var(--critical); border-color: var(--line-strong); }
+.btn-sm { padding: .35rem .6rem; font-size: .85rem; }
+.btn:disabled { opacity: .5; cursor: not-allowed; }
+
+.field { display: grid; gap: .35rem; margin-bottom: .9rem; }
+.field > label { font-size: .82rem; font-weight: 600; color: var(--ink-2); }
+.field .hint { font-size: .78rem; color: var(--muted); }
+input[type=text], input[type=email], input[type=password], input[type=number],
+input[type=date], input[type=search], select, textarea {
+  width: 100%; padding: .55rem .7rem;
+  background: var(--surface); border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm); color: var(--ink);
+}
+textarea { min-height: 90px; resize: vertical; }
+input::placeholder, textarea::placeholder { color: var(--muted); }
+
+.card {
+  background: var(--surface); border: 1px solid var(--line);
+  border-radius: var(--radius); box-shadow: var(--shadow);
+}
+.pad { padding: 1.1rem 1.2rem; }
+.row { display: flex; gap: .6rem; align-items: center; }
+.row-between { display: flex; gap: .8rem; align-items: center; justify-content: space-between; flex-wrap: wrap; }
+.grid { display: grid; gap: 1rem; }
+.cols-2 { grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); }
+.cols-3 { grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); }
+.spacer { flex: 1; }
+.muted { color: var(--muted); }
+.small { font-size: .84rem; }
+.nums { font-variant-numeric: tabular-nums; }
+.stack { display: grid; gap: 1rem; }
+
+.pill {
+  display: inline-flex; align-items: center; gap: .35rem;
+  padding: .15rem .55rem; border-radius: 999px;
+  font-size: .76rem; font-weight: 600;
+  border: 1px solid var(--line-strong); background: var(--surface-2); color: var(--ink-2);
+}
+.pill::before { content: ""; width: .5rem; height: .5rem; border-radius: 50%; background: currentColor; }
+.pill-in_stock  { color: var(--good-text); }
+.pill-reserved  { color: var(--serious); }
+.pill-sold      { color: var(--muted); }
+.pill-prep      { color: var(--series-1); }
+
+.plate {
+  display: inline-block; padding: .2rem .6rem; border-radius: 5px;
+  background: #f5d20a; color: #111; border: 1px solid #b99f06;
+  font-weight: 700; letter-spacing: .06em; font-size: .9rem;
+  text-transform: uppercase; font-variant-numeric: tabular-nums;
+}
+
+table { width: 100%; border-collapse: collapse; }
+th, td { text-align: left; padding: .6rem .7rem; border-bottom: 1px solid var(--line); }
+th { font-size: .76rem; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); font-weight: 650; }
+tbody tr { cursor: pointer; }
+tbody tr:hover { background: var(--surface-2); }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+
+.toast-wrap { position: fixed; bottom: 1rem; left: 50%; transform: translateX(-50%); z-index: 90; display: grid; gap: .5rem; }
+.toast {
+  padding: .6rem 1rem; border-radius: 999px; background: var(--ink); color: var(--page);
+  box-shadow: var(--shadow); font-size: .88rem; font-weight: 550;
+  animation: rise .2s ease;
+}
+@keyframes rise { from { opacity: 0; transform: translateY(8px); } }
+
+/* ============================================================
+   Auth screen
+   ============================================================ */
+#auth { min-height: 100dvh; display: grid; place-items: center; padding: 1.5rem; }
+.auth-card { width: min(420px, 100%); }
+.brandmark { display: flex; align-items: center; gap: .6rem; font-weight: 700; letter-spacing: -.02em; font-size: 1.25rem; }
+.brandmark .dot { width: 1.6rem; height: 1.6rem; border-radius: 7px; background: var(--brand); color: var(--brand-ink); display: grid; place-items: center; font-size: .95rem; }
+.tabs { display: flex; gap: .25rem; background: var(--surface-2); padding: .25rem; border-radius: var(--radius-sm); margin: 1rem 0 1.2rem; }
+.tabs button { flex: 1; border: none; background: transparent; padding: .45rem; border-radius: 6px; cursor: pointer; font-weight: 600; color: var(--ink-2); }
+.tabs button[aria-selected=true] { background: var(--surface); color: var(--ink); box-shadow: var(--shadow); }
+.err { color: var(--critical); font-size: .85rem; font-weight: 550; }
+
+/* ============================================================
+   App shell
+   ============================================================ */
+#app { display: grid; grid-template-columns: 232px 1fr; min-height: 100dvh; }
+.sidebar {
+  background: var(--surface); border-right: 1px solid var(--line);
+  padding: 1rem .8rem; display: flex; flex-direction: column; gap: 1.2rem;
+  position: sticky; top: 0; height: 100dvh;
+}
+.nav { display: grid; gap: .15rem; }
+.nav a {
+  display: flex; align-items: center; gap: .6rem; padding: .5rem .65rem;
+  border-radius: var(--radius-sm); color: var(--ink-2); text-decoration: none; font-weight: 550;
+}
+.nav a:hover { background: var(--surface-2); color: var(--ink); }
+.nav a.active { background: var(--brand-soft); color: var(--brand); }
+.nav svg { width: 18px; height: 18px; flex: none; }
+.main { min-width: 0; }
+.topbar {
+  position: sticky; top: 0; z-index: 20;
+  display: flex; align-items: center; gap: .8rem; flex-wrap: wrap;
+  padding: .8rem 1.4rem; background: color-mix(in srgb, var(--page) 88%, transparent);
+  backdrop-filter: blur(8px); border-bottom: 1px solid var(--line);
+}
+.content { padding: 1.4rem; max-width: 1180px; }
+.menu-btn { display: none; }
+@media (max-width: 860px) {
+  #app { grid-template-columns: 1fr; }
+  .sidebar {
+    position: fixed; inset: 0 auto 0 0; width: 232px; z-index: 60;
+    transform: translateX(-100%); transition: transform .2s ease;
+  }
+  body.nav-open .sidebar { transform: none; }
+  body.nav-open::after { content: ""; position: fixed; inset: 0; background: rgba(0,0,0,.4); z-index: 50; }
+  .menu-btn { display: inline-flex; }
+  .content { padding: 1rem; }
+}
+
+/* ============================================================
+   Dashboard stat tiles + bars
+   ============================================================ */
+.tile { padding: .95rem 1.05rem; display: grid; gap: .2rem; align-content: start; }
+.tile .label { font-size: .76rem; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+.tile .value { font-size: 1.75rem; font-weight: 680; letter-spacing: -.02em; line-height: 1.15; }
+.tile .sub { font-size: .8rem; color: var(--ink-2); }
+.tile .delta-up { color: var(--good-text); font-weight: 600; }
+
+.bars { display: grid; gap: .5rem; }
+.bar-row { display: grid; grid-template-columns: minmax(90px, 34%) 1fr auto; align-items: center; gap: .6rem; }
+.bar-row .name { font-size: .85rem; color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bar-track { display: block; background: var(--surface-2); border-radius: 4px; height: 14px; overflow: hidden; }
+.bar-fill { display: block; height: 100%; background: var(--series-1); border-radius: 0 4px 4px 0; min-width: 2px; }
+.bar-row .val { font-size: .85rem; font-variant-numeric: tabular-nums; color: var(--ink); font-weight: 600; }
+
+/* ============================================================
+   Inventory
+   ============================================================ */
+.filters { display: flex; gap: .5rem; flex-wrap: wrap; align-items: center; margin-bottom: 1rem; }
+.filters input[type=search] { max-width: 260px; }
+.filters select { width: auto; }
+
+.veh-grid { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+.veh-card { overflow: hidden; cursor: pointer; display: flex; flex-direction: column; }
+.veh-card:hover { border-color: var(--line-strong); }
+.veh-photo { aspect-ratio: 16/10; background: var(--surface-2); display: grid; place-items: center; color: var(--muted); font-size: 2rem; }
+.veh-photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.veh-body { padding: .8rem .9rem; display: grid; gap: .35rem; }
+.veh-title { font-weight: 640; }
+.veh-meta { font-size: .82rem; color: var(--muted); }
+.veh-price { font-size: 1.15rem; font-weight: 680; font-variant-numeric: tabular-nums; }
+.veh-stats { display: flex; gap: .8rem; font-size: .8rem; color: var(--ink-2); border-top: 1px solid var(--line); padding-top: .5rem; margin-top: .15rem; }
+
+.empty { text-align: center; padding: 3rem 1rem; color: var(--muted); }
+.empty .big { font-size: 2.5rem; }
+
+/* ============================================================
+   Wizard (guided intake)
+   ============================================================ */
+.wizard { max-width: 620px; margin: 0 auto; }
+.progress { height: 5px; background: var(--surface-2); border-radius: 3px; overflow: hidden; margin-bottom: 1.2rem; }
+.progress > div { height: 100%; background: var(--brand); transition: width .25s ease; }
+.q-title { font-size: 1.3rem; font-weight: 660; letter-spacing: -.02em; margin-bottom: .3rem; }
+.q-help { color: var(--muted); font-size: .88rem; margin-bottom: 1rem; }
+.choices { display: flex; flex-wrap: wrap; gap: .5rem; }
+.choice {
+  padding: .5rem .9rem; border: 1px solid var(--line-strong); border-radius: 999px;
+  background: var(--surface); cursor: pointer; font-weight: 550;
+}
+.choice:hover { background: var(--surface-2); }
+.choice[aria-pressed=true] { background: var(--brand); border-color: var(--brand); color: var(--brand-ink); }
+.wiz-nav { display: flex; gap: .6rem; margin-top: 1.4rem; align-items: center; }
+.assist {
+  border-left: 3px solid var(--brand); background: var(--brand-soft);
+  padding: .6rem .8rem; border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  font-size: .86rem; margin-bottom: 1rem; color: var(--ink);
+}
+.assist b { display: block; font-size: .74rem; text-transform: uppercase; letter-spacing: .05em; color: var(--brand); }
+.plate-entry { display: flex; gap: .6rem; align-items: stretch; }
+.plate-entry input {
+  background: #f5d20a; color: #111; border: 2px solid #b99f06; border-radius: 7px;
+  font-variant-numeric: tabular-nums;
+}
+.plate-entry input::placeholder { color: rgba(0,0,0,.35); }
+.found-tag {
+  display: inline-block; margin-left: .3rem; padding: 0 .35rem; border-radius: 3px;
+  background: var(--brand-soft); color: var(--brand);
+  font-size: .68rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em;
+}
+
+/* ============================================================
+   Vehicle detail
+   ============================================================ */
+.detail-grid { display: grid; grid-template-columns: 1fr 320px; gap: 1.2rem; align-items: start; }
+@media (max-width: 900px) { .detail-grid { grid-template-columns: 1fr; } }
+.gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px,1fr)); gap: .5rem; }
+.gallery img, .gallery .add-photo {
+  aspect-ratio: 4/3; width: 100%; object-fit: cover; border-radius: var(--radius-sm);
+  border: 1px solid var(--line); background: var(--surface-2);
+}
+.gallery .add-photo { display: grid; place-items: center; cursor: pointer; color: var(--muted); font-size: 1.6rem; }
+.spec { display: grid; grid-template-columns: auto 1fr; gap: .35rem 1rem; font-size: .88rem; }
+.spec dt { color: var(--muted); }
+.spec dd { margin: 0; font-variant-numeric: tabular-nums; }
+.timeline { display: grid; gap: .7rem; }
+.tl-item { display: grid; grid-template-columns: auto 1fr; gap: .7rem; }
+.tl-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--series-1); margin-top: .45rem; }
+.tl-body { font-size: .88rem; }
+.tl-time { font-size: .76rem; color: var(--muted); }
+
+.modal-back { position: fixed; inset: 0; background: rgba(0,0,0,.45); display: grid; place-items: center; padding: 1rem; z-index: 80; }
+.modal { width: min(520px, 100%); max-height: 90dvh; overflow: auto; }
+
+/* ============================================================
+   Chat
+   ============================================================ */
+.chat { display: flex; flex-direction: column; height: calc(100dvh - 150px); min-height: 400px; }
+.chat-log { flex: 1; overflow-y: auto; display: grid; gap: .9rem; align-content: start; padding: .3rem; }
+.msg { max-width: 78%; padding: .6rem .85rem; border-radius: 14px; font-size: .92rem; white-space: pre-wrap; }
+.msg-user { justify-self: end; background: var(--brand); color: var(--brand-ink); border-bottom-right-radius: 4px; }
+.msg-ai { justify-self: start; background: var(--surface-2); border: 1px solid var(--line); border-bottom-left-radius: 4px; }
+.chat-form { display: flex; gap: .5rem; padding-top: .8rem; border-top: 1px solid var(--line); }
+.suggestions { display: flex; gap: .4rem; flex-wrap: wrap; padding: .6rem 0 0; }
+</style>
+</head>
+<body>
+
+<!-- ================= AUTH ================= -->
+<section id="auth">
+  <div class="auth-card card pad">
+    <div class="brandmark"><span class="dot">F</span> Forecourt</div>
+    <p class="small muted" style="margin-top:.4rem">Stock, enquiries and pricing for car dealerships.</p>
+
+    <div class="tabs" role="tablist">
+      <button role="tab" id="tab-login" aria-selected="true">Sign in</button>
+      <button role="tab" id="tab-signup" aria-selected="false">Create account</button>
+    </div>
+
+    <form id="form-login">
+      <div class="field">
+        <label for="li-email">Email</label>
+        <input id="li-email" type="email" autocomplete="email" required placeholder="you@dealership.com">
+      </div>
+      <div class="field">
+        <label for="li-pass">Password</label>
+        <input id="li-pass" type="password" autocomplete="current-password" required>
+      </div>
+      <p class="err" id="li-err" hidden></p>
+      <button class="btn btn-primary" style="width:100%" type="submit">Sign in</button>
+    </form>
+
+    <form id="form-signup" hidden>
+      <div class="field">
+        <label for="su-dealer">Dealership name</label>
+        <input id="su-dealer" type="text" required placeholder="Northside Motors">
+      </div>
+      <div class="field">
+        <label for="su-email">Email</label>
+        <input id="su-email" type="email" autocomplete="email" required placeholder="you@dealership.com">
+      </div>
+      <div class="field">
+        <label for="su-pass">Password</label>
+        <input id="su-pass" type="password" autocomplete="new-password" required minlength="8">
+        <span class="hint">At least 8 characters.</span>
+      </div>
+      <p class="err" id="su-err" hidden></p>
+      <button class="btn btn-primary" style="width:100%" type="submit">Create account</button>
+    </form>
+
+    <p class="small muted" style="margin-top:1rem; line-height:1.4">
+      Accounts and stock are stored in this browser only — nothing is sent to a server.
+      Use <b>Settings → Export</b> to back up or move your data.
+    </p>
+  </div>
+</section>
+
+<!-- ================= APP ================= -->
+<div id="app" hidden>
+  <aside class="sidebar">
+    <div class="brandmark"><span class="dot">F</span> Forecourt</div>
+    <nav class="nav" id="nav">
+      <a href="#/dashboard" data-route="dashboard"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg> Dashboard</a>
+      <a href="#/inventory" data-route="inventory"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 17h14M6 17l1.5-5.5A2 2 0 0 1 9.4 10h5.2a2 2 0 0 1 1.9 1.5L18 17M6 17v2M18 17v2"/><circle cx="8" cy="14.5" r=".8" fill="currentColor"/><circle cx="16" cy="14.5" r=".8" fill="currentColor"/></svg> Inventory</a>
+      <a href="#/add" data-route="add"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></svg> Add a car</a>
+      <a href="#/leads" data-route="leads"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h10"/></svg> Enquiries</a>
+      <a href="#/assistant" data-route="assistant"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a8 8 0 1 1-3.2-6.4"/><path d="M12 8v4l3 2"/></svg> AI assistant</a>
+      <a href="#/settings" data-route="settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-2.7 1.1V21a2 2 0 1 1-4 0v-.1A1.6 1.6 0 0 0 7.5 19l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1A1.6 1.6 0 0 0 3 13.6H3a2 2 0 1 1 0-4h.1A1.6 1.6 0 0 0 4.7 7l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1A1.6 1.6 0 0 0 10 3.1V3a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 2.7 1.1l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0 1.1 2.7H21a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1.3z"/></svg> Settings</a>
+    </nav>
+    <div class="spacer"></div>
+    <div class="small">
+      <div id="who" style="font-weight:600"></div>
+      <div class="muted" id="who-email"></div>
+      <button class="btn btn-ghost btn-sm" id="btn-logout" style="margin-top:.5rem">Sign out</button>
+    </div>
+  </aside>
+
+  <main class="main">
+    <header class="topbar">
+      <button class="btn btn-ghost btn-sm menu-btn" id="btn-menu" aria-label="Menu">☰</button>
+      <h1 id="page-title">Dashboard</h1>
+      <div class="spacer"></div>
+      <button class="btn btn-ghost btn-sm" id="btn-theme" title="Toggle theme">◐</button>
+      <a class="btn btn-primary btn-sm" href="#/add">+ Add a car</a>
+    </header>
+    <div class="content" id="view"></div>
+  </main>
+</div>
+
+<div class="toast-wrap" id="toasts"></div>
+
+<script type="module">
+/* ============================================================================
+   Forecourt — single-file dealership stock manager.
+   No build step, no server, no dependencies. Data lives in localStorage.
+   ========================================================================= */
+
+const $  = (sel, root = document) => root.querySelector(sel);
+const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
+
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c =>
+  ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+
+const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
+
+function toast(msg) {
+  const el = document.createElement('div');
+  el.className = 'toast';
+  el.textContent = msg;
+  $('#toasts').append(el);
+  setTimeout(() => el.remove(), 2600);
+}
+
+/* ---------------------------------------------------------------- storage */
+
+const KEY = 'forecourt.v1';
+
+const blank = () => ({ users: [], vehicles: [], events: [], leads: [], session: null, prefs: {} });
+
+let DB = load();
+
+function load() {
+  try {
+    const raw = localStorage.getItem(KEY);
+    if (!raw) return blank();
+    return Object.assign(blank(), JSON.parse(raw));
+  } catch {
+    return blank();
+  }
+}
+
+function save() {
+  try {
+    localStorage.setItem(KEY, JSON.stringify(DB));
+  } catch (e) {
+    toast('Storage full — remove some photos or export your data.');
+    console.error(e);
+  }
+}
+
+const me       = () => DB.users.find(u => u.id === DB.session) || null;
+const myCars   = () => DB.vehicles.filter(v => v.userId === DB.session);
+const myEvents = () => DB.events.filter(e => e.userId === DB.session);
+const myLeads  = () => DB.leads.filter(l => l.userId === DB.session);
+const carById  = (id) => DB.vehicles.find(v => v.id === id && v.userId === DB.session);
+const eventsFor = (vid) => myEvents().filter(e => e.vehicleId === vid)
+  .sort((a, b) => b.at.localeCompare(a.at));
+
+/* ------------------------------------------------------------------- auth */
+
+async function hashPassword(password, saltHex) {
+  const enc = new TextEncoder();
+  const salt = saltHex
+    ? Uint8Array.from(saltHex.match(/../g).map(h => parseInt(h, 16)))
+    : crypto.getRandomValues(new Uint8Array(16));
+  const key = await crypto.subtle.importKey('raw', enc.encode(password), 'PBKDF2', false, ['deriveBits']);
+  const bits = await crypto.subtle.deriveBits(
+    { name: 'PBKDF2', salt, iterations: 150000, hash: 'SHA-256' }, key, 256);
+  const hex = (buf) => [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, '0')).join('');
+  return { salt: hex(salt.buffer ?? salt), hash: hex(bits) };
+}
+
+async function signup({ dealership, email, password }) {
+  email = email.trim().toLowerCase();
+  if (DB.users.some(u => u.email === email)) throw new Error('That email already has an account.');
+  if (password.length < 8) throw new Error('Password must be at least 8 characters.');
+  const { salt, hash } = await hashPassword(password);
+  const user = {
+    id: uid(), email, dealership: dealership.trim(), salt, hash,
+    createdAt: new Date().toISOString(),
+    settings: { currency: 'GBP', targetMargin: 12, aiProvider: 'builtin', aiKey: '', aiModel: '' },
+  };
+  DB.users.push(user);
+  DB.session = user.id;
+  save();
+}
+
+async function login({ email, password }) {
+  email = email.trim().toLowerCase();
+  const user = DB.users.find(u => u.email === email);
+  if (!user) throw new Error('No account with that email.');
+  const { hash } = await hashPassword(password, user.salt);
+  if (hash !== user.hash) throw new Error('Wrong password.');
+  DB.session = user.id;
+  save();
+}
+
+/* ------------------------------------------------------------ formatting */
+
+const CURRENCIES = { GBP: '£', USD: '$', EUR: '€', AED: 'د.إ ', CAD: 'C$', AUD: 'A$' };
+const sym = () => CURRENCIES[me()?.settings?.currency || 'GBP'] || '£';
+
+function money(n, { blankIfNull = true } = {}) {
+  if (n == null || n === '' || isNaN(n)) return blankIfNull ? '—' : sym() + '0';
+  return sym() + Math.round(Number(n)).toLocaleString();
+}
+const num = (n) => (n == null || n === '' || isNaN(n)) ? '—' : Number(n).toLocaleString();
+
+function daysBetween(a, b = new Date()) {
+  return Math.max(0, Math.round((new Date(b) - new Date(a)) / 86400000));
+}
+function ago(iso) {
+  const d = daysBetween(iso);
+  if (d === 0) return 'today';
+  if (d === 1) return 'yesterday';
+  if (d < 30) return d + ' days ago';
+  if (d < 365) return Math.round(d / 30) + ' months ago';
+  return Math.round(d / 365) + ' years ago';
+}
+const fmtDate = (iso) => iso ? new Date(iso).toLocaleDateString(undefined,
+  { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
+
+const carName = (v) => [v.year, v.make, v.model, v.variant].filter(Boolean).join(' ') || 'Untitled vehicle';
+
+/** Show a UK current-style plate the way it is painted: AB12 CDE. */
+const fmtPlate = (p) => {
+  const s = String(p || '').toUpperCase().replace(/\s+/g, '');
+  return /^[A-Z]{2}\d{2}[A-Z]{3}$/.test(s) ? s.slice(0, 4) + ' ' + s.slice(4) : s;
+};
+
+const STATUS_LABEL = { in_stock: 'In stock', prep: 'In prep', reserved: 'Reserved', sold: 'Sold' };
+
+/* ------------------------------------------------- number plate decoding */
+/*
+   UK plates carry their registration period in the two middle digits:
+   "AB12 CDE" → 12 = March 2012, "AB62 CDE" → 62 = September 2012.
+   That is enough to prefill the year without any paid lookup service.
+*/
+function decodePlate(raw) {
+  const p = String(raw || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  const out = { plate: p, format: null, year: null, note: '' };
+  if (!p) return out;
+
+  const uk = p.match(/^([A-Z]{2})(\d{2})([A-Z]{3})$/);          // current style
+  if (uk) {
+    const id = Number(uk[2]);
+    const year = id >= 50 ? 2000 + (id - 50) : 2000 + id;
+    const half = id >= 50 ? 'September' : 'March';
+    out.format = 'UK current';
+    out.year = year;
+    out.note = `Registered from ${half} ${year}.`;
+    return out;
+  }
+  const prefix = p.match(/^([A-Z])(\d{1,3})([A-Z]{3})$/);        // 1983–2001
+  if (prefix) {
+    const letters = 'ABCDEFGHJKLMNPRSTVWXY';
+    const i = letters.indexOf(prefix[1]);
+    if (i >= 0) {
+      out.format = 'UK prefix';
+      out.year = 1983 + i;
+      out.note = `Prefix "${prefix[1]}" plates were issued around ${out.year}.`;
+    }
+    return out;
+  }
+  const suffix = p.match(/^([A-Z]{3})(\d{1,3})([A-Z])$/);        // 1963–1982
+  if (suffix) {
+    const letters = 'ABCDEFGHJKLMNPRSTVWXY';
+    const i = letters.indexOf(suffix[3]);
+    if (i >= 0) {
+      out.format = 'UK suffix';
+      out.year = 1963 + i;
+      out.note = `Suffix "${suffix[3]}" plates were issued around ${out.year}.`;
+    }
+    return out;
+  }
+  out.format = 'Other';
+  out.note = 'Plate format not recognised — fill the details in below.';
+  return out;
+}
+
+/** DVLA memory tags — the first letter of a current-style plate is where it was issued. */
+const PLATE_REGIONS = {
+  A: 'Anglia', B: 'Birmingham', C: 'Cymru', D: 'Deeside &amp; Chester', E: 'Essex',
+  F: 'Forest &amp; Fens', G: 'Garden of England', H: 'Hampshire &amp; Dorset', K: 'Northampton',
+  L: 'London', M: 'Manchester &amp; Merseyside', N: 'Newcastle', O: 'Oxford', P: 'Preston',
+  R: 'Reading', S: 'Scotland', V: 'Severn Valley', W: 'West of England', Y: 'Yorkshire',
+};
+
+/*
+   Plate identification, best source first:
+
+   1. A car you have entered before — instant and exact.
+   2. The DVLA Vehicle Enquiry Service, through the /api/plate function that
+      ships alongside this file. DVLA is free but the key must stay on the
+      server, so lookup only works once you deploy the function and set the
+      key (see the README). It returns make, colour, fuel, engine size, year
+      and MOT expiry — not the model, which is why the model box is still there.
+   3. Failing both, the plate itself: the registration period and issuing
+      office are readable straight off it, offline, with no service at all.
+*/
+/*
+   Lookup can be unavailable for two very different reasons, and the fix is
+   different for each, so the app finds out which and says so plainly rather
+   than quietly falling back and looking broken.
+*/
+let plateService = { state: 'unknown', dvla: false, mot: false };
+
+async function probePlateService() {
+  try {
+    const res = await fetch('/api/plate?status=1');
+    if (res.status === 404) { plateService = { state: 'no_function' }; return plateService; }
+    if (!res.ok) { plateService = { state: 'error' }; return plateService; }
+    const j = await res.json();
+    plateService = {
+      state: j.dvla || j.mot ? 'ready' : 'no_keys',
+      dvla: Boolean(j.dvla), mot: Boolean(j.mot),
+    };
+  } catch {
+    plateService = { state: 'no_function' };
+  }
+  return plateService;
+}
+
+const PLATE_SERVICE_HELP = {
+  // Not an error — a single index.html is a perfectly good way to run this,
+  // it just cannot call DVLA or MOT history, because those need a server.
+  no_function: {
+    ok: true,
+    title: 'Running as a single file',
+    body: 'There is no server here to call DVLA or MOT history, so I read what the plate itself carries — the year and the issuing office — and you type the rest once. Cars you have had before still come back in full.',
+  },
+  no_keys: {
+    title: 'Lookup is deployed but has no keys',
+    body: 'The lookup function is live, but no DVLA or MOT credentials are set. Add them in your Cloudflare Pages project under Settings → Variables and secrets, then redeploy.',
+  },
+  error: {
+    title: 'Lookup is not responding',
+    body: 'The lookup function is deployed but returned an error. Check the keys are correct and the function log in Cloudflare.',
+  },
+};
+
+let plateServiceOffline = false;
+
+async function lookupPlate(raw) {
+  const plate = String(raw || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  const offline = decodePlate(plate);
+  const region = PLATE_REGIONS[plate[0]];
+
+  const prior = DB.vehicles.find(v =>
+    v.userId === DB.session && v.plate.replace(/\s+/g, '') === plate);
+  if (prior) {
+    return {
+      plate, source: 'history', sourceLabel: 'You have had this car before',
+      note: `${carName(prior)} — I have filled in everything from the last time it was on your forecourt.`,
+      data: {
+        make: prior.make, model: prior.model, variant: prior.variant, year: prior.year,
+        fuel: prior.fuel, transmission: prior.transmission, engine: prior.engine,
+        colour: prior.colour, doors: prior.doors, body: prior.body,
+        motTests: prior.motTests,
+      },
+    };
+  }
+
+  try {
+    if (plateServiceOffline) throw new Error('lookup unavailable');
+    const res = await fetch('/api/plate?reg=' + encodeURIComponent(plate));
+    // A 501 (nothing configured) or 404 (function not deployed) will not change
+    // on the next plate, so stop asking for the rest of the session.
+    if (res.status === 501 || res.status === 404) plateServiceOffline = true;
+    if (res.ok) {
+      const v = await res.json();
+      if (v.make || v.model) {
+        const services = [];
+        if (v.sources.includes('dvla')) services.push('DVLA');
+        if (v.sources.includes('mot')) services.push('MOT history');
+
+        const facts = [[v.make, v.model].filter(Boolean).join(' '), v.year, v.colour, v.fuel,
+          v.engine ? v.engine + 'cc' : '',
+          v.taxStatus ? 'Tax: ' + v.taxStatus : '',
+          v.motStatus ? 'MOT: ' + v.motStatus : ''].filter(Boolean).join(' · ');
+
+        const odo = v.lastOdometer
+          ? ` Last MOT reading was ${num(v.lastOdometer)} miles in ${fmtDate(v.lastOdometerDate)} — I have used that as the mileage, correct it to today's figure.`
+          : ' Add the mileage below.';
+
+        return {
+          plate, source: 'api', sourceLabel: 'Found at the ' + services.join(' and '),
+          note: facts + '.' + odo,
+          data: {
+            make: v.make, model: v.model, year: v.year, colour: v.colour,
+            fuel: v.fuel, engine: v.engine, motExpiry: v.motExpiry,
+            mileage: v.lastOdometer, motTests: v.motTests,
+          },
+        };
+      }
+    }
+  } catch { /* nothing configured, or offline — fall through */ }
+
+  const help = PLATE_SERVICE_HELP[plateService.state];
+  return {
+    plate, source: 'offline',
+    sourceLabel: help ? help.title : 'Read from the plate',
+    note: [offline.note, region ? `Issued in ${region.replace(/&amp;/g, '&')}.` : '',
+           help ? help.body : ''].filter(Boolean).join(' '),
+    data: { year: offline.year },
+  };
+}
+
+/*
+   VIN decode uses the US NHTSA vPIC service: genuinely free, no key, no signup.
+   If it is unreachable (offline, or blocked), the wizard just carries on manually.
+*/
+async function decodeVin(vin) {
+  vin = String(vin || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  if (vin.length !== 17) throw new Error('A VIN is 17 characters.');
+  const url = `https://vpic.nhtsa.dot.gov/api/vehicles/decodevin/${vin}?format=json`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error('Lookup service unavailable.');
+  const json = await res.json();
+  const pick = (label) => {
+    const row = json.Results.find(r => r.Variable === label);
+    return row && row.Value && row.Value !== 'Not Applicable' ? row.Value : '';
+  };
+  const cc = pick('Displacement (CC)');
+  return {
+    make: pick('Make'), model: pick('Model'), variant: pick('Trim'),
+    year: Number(pick('Model Year')) || null,
+    body: pick('Body Class'), fuel: pick('Fuel Type - Primary'),
+    transmission: pick('Transmission Style'),
+    engine: cc ? Math.round(Number(cc)) : null,
+    doors: Number(pick('Doors')) || null,
+  };
+}
+
+/* ==========================================================================
+   AI layer
+   --------------------------------------------------------------------------
+   Two modes, both free:
+
+   1. "builtin"  — a deterministic engine that runs entirely in the browser.
+                   No key, no network, no cost, works offline. It handles
+                   pricing advice, listing copy, enquiry replies and questions
+                   about your own stock.
+   2. a hosted model — Google Gemini or any OpenAI-compatible endpoint
+                   (Groq, OpenRouter, Together…), all of which have free tiers.
+                   The key is stored in this browser only and sent straight to
+                   the provider.
+
+   Everything degrades gracefully: if a hosted call fails, the built-in engine
+   answers instead, so no feature is ever dead.
+   ======================================================================== */
+
+const AI = {
+  configured() {
+    const s = me()?.settings || {};
+    return s.aiProvider && s.aiProvider !== 'builtin' && s.aiKey;
+  },
+
+  async chat(system, user) {
+    const s = me()?.settings || {};
+    if (!this.configured()) return null;
+    try {
+      if (s.aiProvider === 'gemini') return await this.gemini(s, system, user);
+      return await this.openaiCompatible(s, system, user);
+    } catch (err) {
+      console.warn('AI provider failed, using built-in engine:', err);
+      toast('AI provider unavailable — used the built-in engine.');
+      return null;
+    }
+  },
+
+  async gemini(s, system, user) {
+    const model = s.aiModel || 'gemini-2.0-flash';
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(s.aiKey)}`;
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        systemInstruction: { parts: [{ text: system }] },
+        contents: [{ role: 'user', parts: [{ text: user }] }],
+        generationConfig: { temperature: 0.6, maxOutputTokens: 900 },
+      }),
+    });
+    if (!res.ok) throw new Error(await res.text());
+    const j = await res.json();
+    return j.candidates?.[0]?.content?.parts?.map(p => p.text).join('') || null;
+  },
+
+  async openaiCompatible(s, system, user) {
+    const base = s.aiBase || 'https://api.groq.com/openai/v1';
+    const model = s.aiModel || 'llama-3.3-70b-versatile';
+    const res = await fetch(base.replace(/\/$/, '') + '/chat/completions', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', authorization: 'Bearer ' + s.aiKey },
+      body: JSON.stringify({
+        model, temperature: 0.6, max_tokens: 900,
+        messages: [{ role: 'system', content: system }, { role: 'user', content: user }],
+      }),
+    });
+    if (!res.ok) throw new Error(await res.text());
+    const j = await res.json();
+    return j.choices?.[0]?.message?.content || null;
+  },
+};
+
+/* ------------------------------------------------ built-in pricing engine */
+
+const EXPECTED_MILES_PER_YEAR = 10000;
+
+function priceAdvice(v) {
+  const year = Number(v.year) || new Date().getFullYear();
+  const age = Math.max(0.5, new Date().getFullYear() - year);
+  const miles = Number(v.mileage) || 0;
+  const expected = age * EXPECTED_MILES_PER_YEAR;
+  const cost = Number(v.purchasePrice) || 0;
+  const target = (me()?.settings?.targetMargin ?? 12) / 100;
+  const reasons = [];
+
+  let factor = 1;
+  if (miles && expected) {
+    const ratio = miles / expected;
+    if (ratio < 0.7)      { factor += 0.06; reasons.push(`Mileage is well under average for its age (${num(miles)} vs ~${num(Math.round(expected))}) — that supports a firmer price.`); }
+    else if (ratio > 1.4) { factor -= 0.08; reasons.push(`Mileage is high for its age (${num(miles)} vs ~${num(Math.round(expected))}) — expect buyers to push back.`); }
+    else                   { reasons.push(`Mileage is about average for its age — neutral on price.`); }
+  }
+  const cond = { excellent: 0.04, good: 0, fair: -0.05, work: -0.12 }[v.condition] ?? 0;
+  if (cond) {
+    factor += cond;
+    reasons.push(cond > 0
+      ? 'Condition is described as excellent, which carries a premium.'
+      : 'Condition notes will cost you something at the negotiating table.');
+  }
+  if (Number(v.owners) === 1) { factor += 0.02; reasons.push('One previous owner is a genuine selling point.'); }
+  if (v.serviceHistory === 'full') { factor += 0.03; reasons.push('Full service history is one of the strongest trust signals in a listing.'); }
+  else if (v.serviceHistory === 'none') { factor -= 0.05; reasons.push('No service history — be ready to justify the price.'); }
+
+  const advisories = v.motTests?.[0]?.advisories || [];
+  if (advisories.length) {
+    factor -= Math.min(0.04, advisories.length * 0.015);
+    reasons.push(`${advisories.length} advisor${advisories.length === 1 ? 'y' : 'ies'} on the last MOT — a buyer can read those online before they ring you, so either fix them or price them in.`);
+  }
+
+  const days = v.createdAt ? daysBetween(v.createdAt) : 0;
+  if (days > 60) { factor -= 0.05; reasons.push(`This car has been in stock ${days} days. Aged stock ties up cash — a visible price move usually beats waiting.`); }
+
+  const floor = cost ? cost * 1.03 : null;
+  const suggested = cost ? Math.max(floor, cost * (1 + target) * factor) : (Number(v.askingPrice) || 0) * factor;
+  const asking = Number(v.askingPrice) || 0;
+  let verdict;
+  if (!suggested) verdict = 'Add what you paid for the car and I can suggest a price.';
+  else if (!asking) verdict = `Suggested screen price: ${money(round95(suggested))}.`;
+  else if (asking > suggested * 1.08) verdict = `You are asking ${money(asking)}, which is above where I would price it (${money(round95(suggested))}). Expect slow enquiries.`;
+  else if (asking < suggested * 0.93) verdict = `You are asking ${money(asking)} — there is likely room to hold out for ${money(round95(suggested))}.`;
+  else verdict = `${money(asking)} is in a sensible band. My estimate is ${money(round95(suggested))}.`;
+
+  return { suggested: suggested ? round95(suggested) : null, verdict, reasons, margin: asking && cost ? asking - cost : null };
+}
+
+/** Dealers price on the 95s — 12,495 sells better than 12,530. */
+function round95(n) {
+  if (!n) return n;
+  if (n < 2000) return Math.round(n / 50) * 50 - 5;
+  return Math.round(n / 100) * 100 - 5;
+}
+
+function builtinDescription(v) {
+  const bits = [];
+  const name = carName(v);
+  const opener = [
+    `${name} finished in ${v.colour || 'a smart colour'}, presented in ${({excellent:'outstanding',good:'very good',fair:'honest',work:'workable'}[v.condition]) || 'good'} condition.`,
+    v.mileage ? `Covered ${num(v.mileage)} miles from ${v.owners ? v.owners + (Number(v.owners) === 1 ? ' owner' : ' owners') : 'previous keepers'}.` : '',
+    v.serviceHistory === 'full' ? 'Backed by a full service history.'
+      : v.serviceHistory === 'part' ? 'Supplied with part service history.' : '',
+  ].filter(Boolean).join(' ');
+  bits.push(opener);
+
+  const spec = [
+    v.engine ? `${(v.engine / 1000).toFixed(1)}-litre` : '',
+    v.fuel, v.transmission, v.body,
+  ].filter(Boolean).join(' ');
+  if (spec) bits.push(`Specification: ${spec}${v.doors ? `, ${v.doors} doors` : ''}.`);
+
+  if (v.features?.length) {
+    bits.push(`Equipment includes ${v.features.slice(0, 8).join(', ')}${v.features.length > 8 ? ' and more' : ''}.`);
+  }
+  if (v.motExpiry) bits.push(`MOT runs to ${fmtDate(v.motExpiry)}.`);
+  if (v.conditionNotes) bits.push(`Please note: ${v.conditionNotes}`);
+  bits.push(`Priced at ${money(v.askingPrice)}. Part exchange welcome, finance available, and viewings are by appointment — call us to arrange one.`);
+  return bits.join('\n\n');
+}
+
+/** Compact snapshot of the account, used as context for a hosted model. */
+function inventorySnapshot() {
+  const cars = myCars();
+  return cars.map(v => ({
+    name: carName(v), plate: v.plate, status: v.status,
+    price: v.askingPrice, cost: v.purchasePrice, mileage: v.mileage,
+    daysInStock: daysBetween(v.createdAt),
+    calls: eventsFor(v.id).filter(e => e.type === 'call').length,
+    enquiries: eventsFor(v.id).filter(e => e.type !== 'call' && e.type !== 'note').length,
+  }));
+}
+
+/** Deterministic answers about the dealer's own stock — no key required. */
+function builtinAnswer(question) {
+  const q = question.toLowerCase();
+  const cars = myCars();
+  const live = cars.filter(c => c.status !== 'sold');
+  const stats = dashboardStats();
+
+  const callsOf = (v) => eventsFor(v.id).filter(e => e.type === 'call').length;
+
+  if (!cars.length) return 'There is nothing in your stock list yet. Add your first car and I can start answering questions about it.';
+
+  if (/(no|zero|any)\s+(calls|enquir|interest)|quiet|not selling|slow|dead/.test(q)) {
+    const quiet = live.filter(v => callsOf(v) === 0 && daysBetween(v.createdAt) >= 7)
+      .sort((a, b) => daysBetween(b.createdAt) - daysBetween(a.createdAt));
+    if (!quiet.length) return 'Every car that has been on the forecourt a week or more has had at least one call. That is a healthy position.';
+    return `${quiet.length} car${quiet.length > 1 ? 's have' : ' has'} had no calls after a week or more:\n\n` +
+      quiet.slice(0, 6).map(v => `• ${carName(v)} (${fmtPlate(v.plate) || "no plate"}) — ${daysBetween(v.createdAt)} days, priced ${money(v.askingPrice)}`).join('\n') +
+      '\n\nWhen a car goes a week without a single call, the price is almost always the reason — the photos and the description come second.';
+  }
+
+  if (/aged|old(est)? stock|longest|sitting|been here/.test(q)) {
+    const aged = [...live].sort((a, b) => daysBetween(b.createdAt) - daysBetween(a.createdAt)).slice(0, 5);
+    return 'Longest in stock:\n\n' + aged.map(v =>
+      `• ${carName(v)} — ${daysBetween(v.createdAt)} days, ${callsOf(v)} calls, ${money(v.askingPrice)}`).join('\n') +
+      `\n\nYour average across live stock is ${stats.avgDays} days.`;
+  }
+
+  if (/best|most calls|popular|interest|hot/.test(q)) {
+    const best = [...live].sort((a, b) => callsOf(b) - callsOf(a)).slice(0, 5);
+    return 'Most enquiries right now:\n\n' + best.map(v =>
+      `• ${carName(v)} — ${callsOf(v)} calls in ${daysBetween(v.createdAt)} days`).join('\n');
+  }
+
+  if (/profit|margin|made|earn/.test(q)) {
+    const sold = cars.filter(c => c.status === 'sold');
+    const profit = sold.reduce((s, v) => s + ((Number(v.soldPrice) || Number(v.askingPrice) || 0) - (Number(v.purchasePrice) || 0)), 0);
+    return `You have sold ${sold.length} car${sold.length === 1 ? '' : 's'} for a combined gross profit of ${money(profit)}` +
+      (sold.length ? `, averaging ${money(profit / sold.length)} per car.` : '.') +
+      `\n\nLive stock is worth ${money(stats.stockValue)} at screen prices, with ${money(stats.capitalTied)} of your own cash tied up in it.`;
+  }
+
+  if (/how many|stock level|count|total cars/.test(q)) {
+    return `You have ${live.length} car${live.length === 1 ? '' : 's'} live (${cars.filter(c => c.status === 'in_stock').length} in stock, ` +
+      `${cars.filter(c => c.status === 'reserved').length} reserved, ${cars.filter(c => c.status === 'prep').length} in prep) ` +
+      `and ${cars.filter(c => c.status === 'sold').length} sold.`;
+  }
+
+  if (/price|worth|overpriced|reduce|drop/.test(q)) {
+    const named = live.find(v => q.includes((v.make || '').toLowerCase()) || (v.plate && q.includes(v.plate.toLowerCase())));
+    if (named) {
+      const a = priceAdvice(named);
+      return `${carName(named)}\n\n${a.verdict}\n\n${a.reasons.map(r => '• ' + r).join('\n')}`;
+    }
+    const candidates = live.filter(v => daysBetween(v.createdAt) > 45 && callsOf(v) < 2);
+    if (candidates.length) {
+      return 'These look like the ones to reprice first:\n\n' + candidates.slice(0, 5).map(v => {
+        const a = priceAdvice(v);
+        return `• ${carName(v)} — ${money(v.askingPrice)} → try ${money(a.suggested)} (${daysBetween(v.createdAt)} days, ${callsOf(v)} calls)`;
+      }).join('\n');
+    }
+    return 'Nothing is obviously mispriced. Open any car and use "Price check" for a per-vehicle view.';
+  }
+
+  return `Here is where the business stands:\n\n` +
+    `• ${live.length} live cars worth ${money(stats.stockValue)} at screen prices\n` +
+    `• ${money(stats.capitalTied)} of your cash tied up, ${money(stats.potentialProfit)} of gross profit in the pipeline\n` +
+    `• ${stats.calls30} calls in the last 30 days across all stock\n` +
+    `• Average ${stats.avgDays} days in stock\n\n` +
+    `Ask me things like "which cars had no calls", "what should I reprice", "how much profit have I made" or "what is my oldest stock".`;
+}
+
+/* ==========================================================================
+   Dashboard statistics
+   ======================================================================== */
+
+function dashboardStats() {
+  const cars = myCars();
+  const live = cars.filter(c => c.status !== 'sold');
+  const sold = cars.filter(c => c.status === 'sold');
+  const ev = myEvents();
+  const since = (d) => new Date(Date.now() - d * 86400000).toISOString();
+
+  const calls30 = ev.filter(e => e.type === 'call' && e.at >= since(30)).length;
+  const callsPrev30 = ev.filter(e => e.type === 'call' && e.at >= since(60) && e.at < since(30)).length;
+
+  const stockValue   = live.reduce((s, v) => s + (Number(v.askingPrice) || 0), 0);
+  const capitalTied  = live.reduce((s, v) => s + (Number(v.purchasePrice) || 0), 0);
+  const soldProfit   = sold.reduce((s, v) => s + ((Number(v.soldPrice) || Number(v.askingPrice) || 0) - (Number(v.purchasePrice) || 0)), 0);
+  const avgDays = live.length
+    ? Math.round(live.reduce((s, v) => s + daysBetween(v.createdAt), 0) / live.length) : 0;
+
+  return {
+    total: cars.length, live: live.length, sold: sold.length,
+    stockValue, capitalTied, potentialProfit: stockValue - capitalTied,
+    soldProfit, calls30, callsPrev30, avgDays,
+    totalEnquiries: ev.filter(e => e.type !== 'note').length,
+  };
+}
+
+/* ==========================================================================
+   Views
+   ======================================================================== */
+
+const PAGE_TITLES = {
+  dashboard: 'Dashboard', inventory: 'Inventory', add: 'Add a car',
+  leads: 'Enquiries', assistant: 'AI assistant', settings: 'Settings', vehicle: 'Vehicle',
+};
+
+function render() {
+  const user = me();
+  if (!user) { $('#auth').hidden = false; $('#app').hidden = true; return; }
+  $('#auth').hidden = true; $('#app').hidden = false;
+  $('#who').textContent = user.dealership;
+  $('#who-email').textContent = user.email;
+
+  const hash = location.hash.replace(/^#\/?/, '') || 'dashboard';
+  const [route, arg] = hash.split('/');
+  $('#page-title').textContent = PAGE_TITLES[route] || 'Forecourt';
+  $$('#nav a').forEach(a => a.classList.toggle('active', a.dataset.route === route));
+  document.body.classList.remove('nav-open');
+
+  const view = $('#view');
+  view.scrollTop = 0;
+  const renderer = {
+    dashboard: viewDashboard, inventory: viewInventory, add: viewAdd,
+    vehicle: () => viewVehicle(arg), leads: viewLeads,
+    assistant: viewAssistant, settings: viewSettings,
+  }[route] || viewDashboard;
+  view.innerHTML = '';
+  renderer(view);
+}
+
+/* --------------------------------------------------------------- dashboard */
+
+function viewDashboard(root) {
+  const s = dashboardStats();
+  const cars = myCars();
+
+  if (!cars.length) {
+    root.innerHTML = `
+      <div class="card pad empty">
+        <div class="big">🚗</div>
+        <h2 style="margin:.6rem 0 .3rem">Your forecourt is empty</h2>
+        <p class="muted" style="max-width:44ch;margin:0 auto 1.2rem">
+          Add your first car — type the number plate and Forecourt walks you through
+          the rest, one question at a time.
+        </p>
+        <a class="btn btn-primary" href="#/add">Add your first car</a>
+      </div>`;
+    return;
+  }
+
+  const callDelta = s.callsPrev30
+    ? Math.round(((s.calls30 - s.callsPrev30) / s.callsPrev30) * 100) : null;
+
+  const live = cars.filter(c => c.status !== 'sold');
+  const byCalls = [...live]
+    .map(v => ({ v, n: eventsFor(v.id).filter(e => e.type === 'call').length }))
+    .sort((a, b) => b.n - a.n).slice(0, 6);
+  const maxCalls = Math.max(1, ...byCalls.map(b => b.n));
+
+  const aged = [...live].sort((a, b) => daysBetween(b.createdAt) - daysBetween(a.createdAt)).slice(0, 6);
+  const maxDays = Math.max(1, ...aged.map(v => daysBetween(v.createdAt)));
+
+  root.innerHTML = `
+    <div class="stack">
+      <div class="grid cols-3">
+        <div class="card tile">
+          <span class="label">Live stock</span>
+          <span class="value nums">${s.live}</span>
+          <span class="sub">${s.sold} sold all time</span>
+        </div>
+        <div class="card tile">
+          <span class="label">Stock value</span>
+          <span class="value nums">${money(s.stockValue)}</span>
+          <span class="sub">${money(s.capitalTied)} of your cash in it</span>
+        </div>
+        <div class="card tile">
+          <span class="label">Profit in stock</span>
+          <span class="value nums">${money(s.potentialProfit)}</span>
+          <span class="sub">${money(s.soldProfit)} banked from sales</span>
+        </div>
+        <div class="card tile">
+          <span class="label">Calls · last 30 days</span>
+          <span class="value nums">${s.calls30}</span>
+          <span class="sub">${callDelta == null ? 'no prior period yet'
+            : callDelta >= 0 ? `<span class="delta-up">▲ ${callDelta}%</span> vs previous 30`
+            : `▼ ${Math.abs(callDelta)}% vs previous 30`}</span>
+        </div>
+        <div class="card tile">
+          <span class="label">Avg days in stock</span>
+          <span class="value nums">${s.avgDays}</span>
+          <span class="sub">across live vehicles</span>
+        </div>
+        <div class="card tile">
+          <span class="label">Open enquiries</span>
+          <span class="value nums">${myLeads().filter(l => l.stage !== 'won' && l.stage !== 'lost').length}</span>
+          <span class="sub">${myLeads().length} logged in total</span>
+        </div>
+      </div>
+
+      <div class="grid cols-2">
+        <section class="card pad">
+          <h3>Calls per vehicle</h3>
+          <p class="small muted" style="margin:.15rem 0 .9rem">Live stock, all time.</p>
+          ${byCalls.length ? `<div class="bars">${byCalls.map(b => `
+            <div class="bar-row" title="${esc(carName(b.v))}: ${b.n} calls">
+              <span class="name">${esc(carName(b.v))}</span>
+              <span class="bar-track"><span class="bar-fill" style="width:${Math.max(2, (b.n / maxCalls) * 100)}%"></span></span>
+              <span class="val">${b.n}</span>
+            </div>`).join('')}</div>`
+            : '<p class="small muted">No calls logged yet.</p>'}
+        </section>
+
+        <section class="card pad">
+          <h3>Days in stock</h3>
+          <p class="small muted" style="margin:.15rem 0 .9rem">Oldest first — these tie up your cash.</p>
+          <div class="bars">${aged.map(v => `
+            <div class="bar-row" title="${esc(carName(v))}: ${daysBetween(v.createdAt)} days">
+              <span class="name">${esc(carName(v))}</span>
+              <span class="bar-track"><span class="bar-fill" style="width:${Math.max(2, (daysBetween(v.createdAt) / maxDays) * 100)}%;background:${daysBetween(v.createdAt) > 60 ? 'var(--series-2)' : 'var(--series-1)'}"></span></span>
+              <span class="val">${daysBetween(v.createdAt)}d</span>
+            </div>`).join('')}</div>
+        </section>
+      </div>
+
+      <section class="card pad">
+        <div class="row-between" style="margin-bottom:.8rem">
+          <h3>What I'd look at today</h3>
+          <a class="btn btn-sm" href="#/assistant">Ask the assistant</a>
+        </div>
+        <div id="briefing" class="small" style="white-space:pre-wrap;line-height:1.6"></div>
+      </section>
+    </div>`;
+
+  $('#briefing').textContent = dailyBriefing();
+}
+
+function dailyBriefing() {
+  const cars = myCars().filter(c => c.status !== 'sold');
+  const lines = [];
+  const callsOf = (v) => eventsFor(v.id).filter(e => e.type === 'call').length;
+
+  const quiet = cars.filter(v => callsOf(v) === 0 && daysBetween(v.createdAt) >= 14);
+  if (quiet.length) lines.push(`• ${quiet.length} car${quiet.length > 1 ? 's have' : ' has'} gone two weeks without a single call — ${quiet.slice(0, 3).map(carName).join(', ')}. Reprice or reshoot them.`);
+
+  const aged = cars.filter(v => daysBetween(v.createdAt) > 60);
+  if (aged.length) lines.push(`• ${aged.length} vehicle${aged.length > 1 ? 's are' : ' is'} past 60 days. Every extra week costs you money you cannot see on the balance sheet.`);
+
+  const noPrice = cars.filter(v => !v.askingPrice);
+  if (noPrice.length) lines.push(`• ${noPrice.length} car${noPrice.length > 1 ? 's have' : ' has'} no screen price set.`);
+
+  const noPhoto = cars.filter(v => !v.photos?.length);
+  if (noPhoto.length) lines.push(`• ${noPhoto.length} car${noPhoto.length > 1 ? 's have' : ' has'} no photos. Listings without photos get a fraction of the calls.`);
+
+  const thin = cars.filter(v => !v.description);
+  if (thin.length) lines.push(`• ${thin.length} listing${thin.length > 1 ? 's have' : ' has'} no description — open the car and hit "Write listing" to generate one.`);
+
+  const motSoon = cars.filter(v => v.motExpiry &&
+    new Date(v.motExpiry) - Date.now() < 60 * 86400000 && new Date(v.motExpiry) > Date.now());
+  if (motSoon.length) lines.push(`• ${motSoon.length} car${motSoon.length > 1 ? 's have' : ' has'} an MOT expiring within 60 days — ${motSoon.slice(0, 3).map(carName).join(', ')}. Buyers ask, and a fresh certificate sells.`);
+
+  const advisories = cars.filter(v => v.motTests?.[0]?.advisories?.length);
+  if (advisories.length) lines.push(`• ${advisories.length} car${advisories.length > 1 ? 's carry' : ' carries'} advisories from its last MOT. Fix them or price them in before a buyer reads the certificate.`);
+
+  const stale = myLeads().filter(l => !['won', 'lost'].includes(l.stage) && daysBetween(l.lastContactAt || l.createdAt) >= 3);
+  if (stale.length) lines.push(`• ${stale.length} enquir${stale.length > 1 ? 'ies have' : 'y has'} gone quiet for 3+ days. A follow-up call converts more than a new advert.`);
+
+  if (!lines.length) lines.push('• Nothing needs attention — every car is priced, photographed, described and getting calls. Good position to be in.');
+  return lines.join('\n');
+}
+
+/* --------------------------------------------------------------- inventory */
+
+const invState = { q: '', status: 'all', sort: 'newest', layout: 'grid' };
+
+function viewInventory(root) {
+  root.innerHTML = `
+    <div class="filters">
+      <input type="search" id="inv-q" placeholder="Search plate, make, model…" value="${esc(invState.q)}">
+      <select id="inv-status">
+        <option value="all">All statuses</option>
+        <option value="in_stock">In stock</option>
+        <option value="prep">In prep</option>
+        <option value="reserved">Reserved</option>
+        <option value="sold">Sold</option>
+      </select>
+      <select id="inv-sort">
+        <option value="newest">Newest first</option>
+        <option value="oldest">Longest in stock</option>
+        <option value="price_desc">Price: high to low</option>
+        <option value="price_asc">Price: low to high</option>
+        <option value="calls">Most calls</option>
+      </select>
+      <div class="spacer"></div>
+      <button class="btn btn-sm" id="inv-layout">${invState.layout === 'grid' ? 'Table view' : 'Card view'}</button>
+      <button class="btn btn-sm" id="inv-export">Export CSV</button>
+    </div>
+    <div id="inv-body"></div>`;
+
+  $('#inv-status').value = invState.status;
+  $('#inv-sort').value = invState.sort;
+
+  $('#inv-q').oninput = (e) => { invState.q = e.target.value; paint(); };
+  $('#inv-status').onchange = (e) => { invState.status = e.target.value; paint(); };
+  $('#inv-sort').onchange = (e) => { invState.sort = e.target.value; paint(); };
+  $('#inv-layout').onclick = () => {
+    invState.layout = invState.layout === 'grid' ? 'table' : 'grid';
+    $('#inv-layout').textContent = invState.layout === 'grid' ? 'Table view' : 'Card view';
+    paint();
+  };
+  $('#inv-export').onclick = exportCsv;
+
+  paint();
+
+  function paint() {
+    const callsOf = (v) => eventsFor(v.id).filter(e => e.type === 'call').length;
+    let list = myCars();
+    const q = invState.q.trim().toLowerCase();
+    if (q) list = list.filter(v =>
+      [v.plate, v.make, v.model, v.variant, v.colour, v.stockRef].join(' ').toLowerCase().includes(q));
+    if (invState.status !== 'all') list = list.filter(v => v.status === invState.status);
+
+    list.sort((a, b) => ({
+      newest:     () => b.createdAt.localeCompare(a.createdAt),
+      oldest:     () => a.createdAt.localeCompare(b.createdAt),
+      price_desc: () => (Number(b.askingPrice) || 0) - (Number(a.askingPrice) || 0),
+      price_asc:  () => (Number(a.askingPrice) || 0) - (Number(b.askingPrice) || 0),
+      calls:      () => callsOf(b) - callsOf(a),
+    })[invState.sort]());
+
+    const body = $('#inv-body');
+    if (!list.length) {
+      body.innerHTML = `<div class="card pad empty"><div class="big">🔎</div>
+        <p style="margin-top:.5rem">No vehicles match.</p></div>`;
+      return;
+    }
+
+    if (invState.layout === 'table') {
+      body.innerHTML = `<div class="card" style="overflow:auto"><table>
+        <thead><tr>
+          <th>Plate</th><th>Vehicle</th><th class="num">Mileage</th><th class="num">Price</th>
+          <th class="num">Margin</th><th class="num">Calls</th><th class="num">Days</th><th>Status</th>
+        </tr></thead><tbody>
+        ${list.map(v => {
+          const margin = (Number(v.askingPrice) || 0) - (Number(v.purchasePrice) || 0);
+          return `<tr data-id="${v.id}">
+            <td>${v.plate ? `<span class="plate">${esc(fmtPlate(v.plate))}</span>` : '<span class="muted">—</span>'}</td>
+            <td><b>${esc(carName(v))}</b><div class="small muted">${esc([v.fuel, v.transmission, v.colour].filter(Boolean).join(' · '))}</div></td>
+            <td class="num">${num(v.mileage)}</td>
+            <td class="num">${money(v.askingPrice)}</td>
+            <td class="num">${v.purchasePrice && v.askingPrice ? money(margin) : '—'}</td>
+            <td class="num">${callsOf(v)}</td>
+            <td class="num">${daysBetween(v.createdAt)}</td>
+            <td><span class="pill pill-${v.status}">${STATUS_LABEL[v.status]}</span></td>
+          </tr>`;
+        }).join('')}
+        </tbody></table></div>`;
+    } else {
+      body.innerHTML = `<div class="veh-grid">${list.map(v => `
+        <article class="card veh-card" data-id="${v.id}">
+          <div class="veh-photo">${v.photos?.[0]
+            ? `<img src="${v.photos[0]}" alt="${esc(carName(v))}" loading="lazy">` : '🚗'}</div>
+          <div class="veh-body">
+            <div class="row-between" style="gap:.4rem">
+              ${v.plate ? `<span class="plate">${esc(fmtPlate(v.plate))}</span>` : '<span></span>'}
+              <span class="pill pill-${v.status}">${STATUS_LABEL[v.status]}</span>
+            </div>
+            <div class="veh-title">${esc(carName(v))}</div>
+            <div class="veh-meta">${esc([num(v.mileage) + ' mi', v.fuel, v.transmission].filter(x => x && !x.startsWith('—')).join(' · '))}</div>
+            <div class="veh-price">${money(v.askingPrice)}</div>
+            <div class="veh-stats">
+              <span>📞 ${callsOf(v)} calls</span>
+              <span>⏱ ${daysBetween(v.createdAt)} days</span>
+            </div>
+          </div>
+        </article>`).join('')}</div>`;
+    }
+
+    $$('[data-id]', body).forEach(el => {
+      el.onclick = () => { location.hash = '#/vehicle/' + el.dataset.id; };
+    });
+  }
+}
+
+function exportCsv() {
+  const cols = ['stockRef','plate','vin','year','make','model','variant','mileage','fuel','transmission',
+    'body','colour','owners','serviceHistory','motExpiry','condition','purchasePrice','askingPrice',
+    'soldPrice','status','createdAt'];
+  const callsOf = (v) => eventsFor(v.id).filter(e => e.type === 'call').length;
+  const rows = [[...cols, 'calls', 'daysInStock'].join(',')];
+  for (const v of myCars()) {
+    const cells = cols.map(c => {
+      const val = v[c] ?? '';
+      return /[",\n]/.test(String(val)) ? '"' + String(val).replace(/"/g, '""') + '"' : val;
+    });
+    cells.push(callsOf(v), daysBetween(v.createdAt));
+    rows.push(cells.join(','));
+  }
+  const blob = new Blob([rows.join('\n')], { type: 'text/csv' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `forecourt-stock-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+/* ==========================================================================
+   Guided intake — the "automated questions" flow
+   --------------------------------------------------------------------------
+   Questions are declarative. Each one can be skipped based on earlier answers,
+   so an electric car is never asked its engine size and a car in perfect order
+   is never asked what is wrong with it.
+   ======================================================================== */
+
+const FUELS = ['Petrol', 'Diesel', 'Hybrid', 'Plug-in hybrid', 'Electric', 'LPG'];
+const BODIES = ['Hatchback', 'Saloon', 'Estate', 'SUV', 'Coupe', 'Convertible', 'MPV', 'Pickup', 'Van'];
+const FEATURES = ['Air conditioning','Climate control','Sat nav','Apple CarPlay','Android Auto','Bluetooth',
+  'Cruise control','Parking sensors','Reversing camera','Heated seats','Leather seats','Panoramic roof',
+  'Alloy wheels','Tow bar','Isofix','Keyless entry','Adaptive cruise','Lane assist','DAB radio','Spare key'];
+
+/*
+   The plate step does the heavy lifting: it identifies the car and fills in
+   make, year, fuel, engine and colour, so none of those are asked as questions.
+   What follows is only what a registration lookup cannot tell you.
+*/
+const QUESTIONS = [
+  { id: 'plate', type: 'plate', title: "What's the number plate?",
+    help: 'Type the registration and I will identify the car.' },
+  { id: 'colour', type: 'text', title: 'Colour and doors', fields: [
+      { key: 'colour', label: 'Colour', placeholder: 'Metallic grey' },
+      { key: 'doors', label: 'Doors', type: 'number', placeholder: '5' },
+    ] },
+  { id: 'owners', type: 'text', title: 'Previous owners and MOT', fields: [
+      { key: 'owners', label: 'Previous owners', type: 'number', placeholder: '2' },
+      { key: 'motExpiry', label: 'MOT expires', type: 'date' },
+    ] },
+  { id: 'service', type: 'choice', key: 'serviceHistory', title: 'Service history',
+    options: [
+      { value: 'full', label: 'Full history' },
+      { value: 'part', label: 'Part history' },
+      { value: 'none', label: 'None' },
+    ] },
+  { id: 'condition', type: 'choice', key: 'condition', title: 'Honest condition?',
+    help: 'Be straight with yourself here — it feeds the price advice.',
+    options: [
+      { value: 'excellent', label: 'Excellent' },
+      { value: 'good', label: 'Good' },
+      { value: 'fair', label: 'Fair' },
+      { value: 'work', label: 'Needs work' },
+    ] },
+  { id: 'faults', type: 'textarea', key: 'conditionNotes', title: "What needs doing?",
+    help: 'Kerbed alloys, a stone chip, a warning light — anything a buyer will spot.',
+    when: (d) => d.condition === 'fair' || d.condition === 'work' },
+  { id: 'features', type: 'multi', key: 'features', title: 'Tick the equipment',
+    help: 'These go straight into the listing copy.', options: FEATURES },
+  { id: 'money', type: 'text', title: 'The money', help: 'What you paid, and what it goes on the screen at.',
+    fields: [
+      { key: 'purchasePrice', label: 'What you paid', type: 'number', placeholder: '9500' },
+      { key: 'askingPrice', label: 'Screen price', type: 'number', placeholder: '11495' },
+    ] },
+  { id: 'photos', type: 'photos', title: 'Add photos',
+    help: 'Optional, but listings with photos get several times the calls. Images are resized to keep storage small.' },
+];
+
+let wizard = null;
+
+function viewAdd(root) {
+  if (!wizard) wizard = { i: 0, data: { features: [], photos: [] } };
+  paintWizard(root);
+}
+
+function visibleQuestions(data) {
+  return QUESTIONS.filter(q => !q.when || q.when(data));
+}
+
+function paintWizard(root) {
+  const qs = visibleQuestions(wizard.data);
+  wizard.i = Math.min(wizard.i, qs.length - 1);
+  const q = qs[wizard.i];
+  const d = wizard.data;
+  const pct = ((wizard.i) / qs.length) * 100;
+
+  root.innerHTML = `
+    <div class="wizard">
+      <div class="progress"><div style="width:${pct}%"></div></div>
+      <div class="card pad">
+        <p class="small muted" style="margin-bottom:.4rem">Question ${wizard.i + 1} of ${qs.length}</p>
+        <div class="q-title">${esc(q.title)}</div>
+        ${q.help ? `<p class="q-help">${esc(q.help)}</p>` : ''}
+        <div id="q-assist"></div>
+        <div id="q-body"></div>
+        <div class="wiz-nav">
+          <button class="btn" id="w-back" ${wizard.i === 0 ? 'disabled' : ''}>Back</button>
+          <button class="btn btn-primary" id="w-next">${wizard.i === qs.length - 1 ? 'Save vehicle' : 'Next'}</button>
+          <button class="btn btn-ghost" id="w-skip">Skip</button>
+          <div class="spacer"></div>
+          <button class="btn btn-ghost btn-sm" id="w-cancel">Cancel</button>
+        </div>
+      </div>
+      <p class="small muted" style="text-align:center;margin-top:.9rem">
+        Press Enter to move on. You can edit anything later.
+      </p>
+    </div>`;
+
+  const body = $('#q-body');
+
+  if (q.type === 'plate') {
+    body.innerHTML = `
+      <div class="plate-entry">
+        <input type="text" id="f-plate" placeholder="AB12 CDE" maxlength="9" value="${esc(fmtPlate(d.plate || ''))}"
+          style="text-transform:uppercase;font-weight:700;letter-spacing:.12em;font-size:1.6rem;text-align:center">
+        <button class="btn btn-primary" id="plate-go">Identify</button>
+      </div>
+      <div id="plate-out" class="small" style="margin-top:.8rem"></div>
+      <div id="plate-confirm"></div>`;
+
+    const input = $('#f-plate');
+    const out = $('#plate-out');
+    let lastLookedUp = null;
+    let debounce = null;
+
+    const runLookup = async () => {
+      const raw = input.value;
+      const clean = raw.toUpperCase().replace(/[^A-Z0-9]/g, '');
+      if (!clean) { out.textContent = ''; $('#plate-confirm').innerHTML = ''; return; }
+      lastLookedUp = clean;
+      out.innerHTML = '<span class="muted">Identifying…</span>';
+
+      if (plateService.state === 'unknown') await probePlateService();
+
+      const found = await lookupPlate(raw);
+      d.plate = found.plate;
+      d.foundKeys = Object.keys(found.data).filter(k => found.data[k]);
+      Object.entries(found.data).forEach(([k, val]) => { if (val) d[k] = val; });
+      out.innerHTML = `<div class="assist" style="margin:0"><b>${esc(found.sourceLabel)}</b>${esc(found.note)}</div>`;
+      paintConfirm();
+    };
+
+    /* Whatever the lookup could not tell us is asked for right here, once.
+       Anything it did tell us is labelled, so it is obvious what was known
+       and what still needs typing. */
+    function paintConfirm() {
+      const foundKeys = d.foundKeys || [];
+      $('#plate-confirm').innerHTML = `
+        <div class="grid cols-2" style="margin-top:1rem">
+          ${[['make', 'Make', 'text', 'Ford'], ['model', 'Model', 'text', 'Focus'],
+             ['variant', 'Trim / variant', 'text', 'ST-Line'], ['year', 'Year', 'number', '2019'],
+             ['mileage', 'Mileage', 'number', '42000'], ['fuel', 'Fuel', 'text', 'Petrol'],
+             ['transmission', 'Gearbox', 'text', 'Manual'], ['engine', 'Engine (cc)', 'number', '1600']]
+            .map(([k, label, type, ph]) => `
+              <div class="field" style="margin:0">
+                <label for="f-${k}">${label}${foundKeys.includes(k)
+                  ? ' <span class="found-tag">found</span>' : ''}</label>
+                <input id="f-${k}" type="${type}" placeholder="${ph}" value="${esc(d[k] ?? '')}">
+              </div>`).join('')}
+        </div>
+        <p class="small muted" style="margin-top:.7rem">Correct anything that looks wrong — this is the only time you will be asked.</p>`;
+    }
+
+    $('#plate-go').onclick = runLookup;
+
+    input.oninput = () => {
+      const clean = input.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+      if (!$('#plate-confirm').innerHTML) {
+        const info = decodePlate(input.value);
+        out.innerHTML = info.note ? `<span class="muted">${esc(info.note)}</span>` : '';
+      }
+      // Identify as soon as the plate looks complete — nobody should have to
+      // find a button for the thing the screen exists to do.
+      clearTimeout(debounce);
+      if (clean.length >= 5 && clean !== lastLookedUp) {
+        debounce = setTimeout(runLookup, 600);
+      }
+    };
+
+    if (d.plate) paintConfirm();
+    input.focus();
+
+  } else if (q.type === 'text') {
+    body.innerHTML = q.fields.map(f => `
+      <div class="field">
+        <label for="f-${f.key}">${esc(f.label)}</label>
+        <input id="f-${f.key}" type="${f.type || 'text'}" placeholder="${esc(f.placeholder || '')}"
+          value="${esc(d[f.key] ?? '')}">
+      </div>`).join('');
+    body.querySelector('input')?.focus();
+
+  } else if (q.type === 'textarea') {
+    body.innerHTML = `<textarea id="f-${q.key}" placeholder="Type anything a buyer would notice…">${esc(d[q.key] || '')}</textarea>`;
+    $(`#f-${q.key}`).focus();
+
+  } else if (q.type === 'choice') {
+    body.innerHTML = `<div class="choices">${q.options.map(o => {
+      const value = o.value ?? o, label = o.label ?? o;
+      return `<button type="button" class="choice" data-v="${esc(value)}"
+        aria-pressed="${d[q.key] === value}">${esc(label)}</button>`;
+    }).join('')}</div>`;
+    $$('.choice', body).forEach(b => b.onclick = () => {
+      d[q.key] = b.dataset.v;
+      $$('.choice', body).forEach(x => x.setAttribute('aria-pressed', x === b));
+      setTimeout(next, 140);
+    });
+
+  } else if (q.type === 'multi') {
+    d.features = d.features || [];
+    body.innerHTML = `<div class="choices">${q.options.map(o => `
+      <button type="button" class="choice" data-v="${esc(o)}"
+        aria-pressed="${d.features.includes(o)}">${esc(o)}</button>`).join('')}</div>`;
+    $$('.choice', body).forEach(b => b.onclick = () => {
+      const v = b.dataset.v;
+      const on = d.features.includes(v);
+      d.features = on ? d.features.filter(x => x !== v) : [...d.features, v];
+      b.setAttribute('aria-pressed', String(!on));
+    });
+
+  } else if (q.type === 'photos') {
+    d.photos = d.photos || [];
+    body.innerHTML = `
+      <div class="gallery" id="wiz-gallery">
+        ${d.photos.map((p, i) => `<img src="${p}" alt="Photo ${i + 1}">`).join('')}
+        <label class="add-photo">+<input type="file" accept="image/*" multiple hidden id="f-photos"></label>
+      </div>`;
+    $('#f-photos').onchange = async (e) => {
+      for (const file of e.target.files) d.photos.push(await shrinkImage(file));
+      paintWizard(root);
+    };
+  }
+
+  /* Contextual coaching — free, instant, and specific to what was just typed. */
+  const assist = wizardAssist(q, d);
+  if (assist) $('#q-assist').innerHTML = `<div class="assist"><b>Tip</b>${esc(assist)}</div>`;
+
+  $('#w-back').onclick = () => { collect(q, d); wizard.i--; paintWizard(root); };
+  $('#w-next').onclick = next;
+  // Skip still keeps anything already typed — losing a half-filled answer is worse
+  // than carrying it forward.
+  $('#w-skip').onclick = () => {
+    collect(q, d);
+    if (wizard.i < visibleQuestions(d).length - 1) { wizard.i++; paintWizard(root); }
+    else next();
+  };
+  $('#w-cancel').onclick = () => { wizard = null; location.hash = '#/inventory'; };
+
+  root.onkeydown = (e) => {
+    if (e.key === 'Enter' && e.target.tagName !== 'TEXTAREA') { e.preventDefault(); next(); }
+  };
+
+  function next() {
+    collect(q, d);
+    const qs2 = visibleQuestions(d);
+    if (wizard.i >= qs2.length - 1) return finish();
+    wizard.i++;
+    paintWizard(root);
+  }
+
+  function finish() {
+    const v = {
+      id: uid(), userId: DB.session,
+      stockRef: d.stockRef || ('S' + String(myCars().length + 1).padStart(3, '0')),
+      plate: (d.plate || '').toUpperCase(), vin: (d.vin || '').toUpperCase(),
+      make: d.make || '', model: d.model || '', variant: d.variant || '',
+      year: Number(d.year) || null, mileage: Number(d.mileage) || null,
+      fuel: d.fuel || '', transmission: d.transmission || '', body: d.body || '',
+      engine: Number(d.engine) || null, batteryKwh: Number(d.batteryKwh) || null,
+      rangeMiles: Number(d.rangeMiles) || null,
+      colour: d.colour || '', doors: Number(d.doors) || null, owners: Number(d.owners) || null,
+      motExpiry: d.motExpiry || '', serviceHistory: d.serviceHistory || '',
+      condition: d.condition || 'good', conditionNotes: d.conditionNotes || '',
+      features: d.features || [], photos: d.photos || [], motTests: d.motTests || [],
+      purchasePrice: Number(d.purchasePrice) || null,
+      askingPrice: Number(d.askingPrice) || null,
+      soldPrice: null, description: '', status: 'in_stock',
+      createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+    };
+    DB.vehicles.push(v);
+    save();
+    wizard = null;
+    toast('Vehicle saved.');
+    location.hash = '#/vehicle/' + v.id;
+  }
+}
+
+const PLATE_CONFIRM_KEYS = ['make', 'model', 'variant', 'year', 'mileage', 'fuel', 'transmission', 'engine'];
+
+function collect(q, d) {
+  if (q.type === 'plate') {
+    d.plate = ($('#f-plate')?.value || '').toUpperCase().trim();
+    PLATE_CONFIRM_KEYS.forEach(k => { const el = $('#f-' + k); if (el) d[k] = el.value.trim(); });
+  }
+  else if (q.type === 'text') q.fields.forEach(f => {
+    const el = $('#f-' + f.key); if (el) d[f.key] = el.value.trim();
+  });
+  else if (q.type === 'textarea') { const el = $('#f-' + q.key); if (el) d[q.key] = el.value.trim(); }
+}
+
+/** Instant, rule-based coaching shown inside the wizard. */
+function wizardAssist(q, d) {
+  if (q.id === 'colour' && d.mileage && d.year) {
+    const age = Math.max(1, new Date().getFullYear() - Number(d.year));
+    const perYear = Math.round(Number(d.mileage) / age);
+    if (perYear > 15000) return `That mileage works out at about ${num(perYear)} miles a year — high. Lead on the service history in the advert.`;
+    if (perYear < 6000) return `About ${num(perYear)} miles a year — genuinely low. Say so in the headline; it is worth real money.`;
+  }
+  if (q.id === 'money' && d.purchasePrice) {
+    const target = me()?.settings?.targetMargin ?? 12;
+    const suggested = round95(Number(d.purchasePrice) * (1 + target / 100));
+    return `On your ${target}% target margin that screens at about ${money(suggested)}.`;
+  }
+  if (q.id === 'condition') return 'Buyers forgive a fault they were told about. They walk away from one they discover.';
+  if (q.id === 'features') return 'Sat nav, camera and heated seats are the three that get clicked most — tick them if they are there.';
+  return null;
+}
+
+/** Resize to 1000px wide JPEG so localStorage stays workable. */
+function shrinkImage(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        const scale = Math.min(1, 1000 / img.width);
+        const c = document.createElement('canvas');
+        c.width = Math.round(img.width * scale);
+        c.height = Math.round(img.height * scale);
+        c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+        resolve(c.toDataURL('image/jpeg', 0.72));
+      };
+      img.onerror = reject;
+      img.src = reader.result;
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+/* ------------------------------------------------------------ vehicle page */
+
+function viewVehicle(id) {
+  const root = $('#view');
+  const v = carById(id);
+  if (!v) { root.innerHTML = '<div class="card pad empty">That vehicle no longer exists.</div>'; return; }
+  const events = eventsFor(v.id);
+  const calls = events.filter(e => e.type === 'call').length;
+  const margin = (Number(v.askingPrice) || 0) - (Number(v.purchasePrice) || 0);
+
+  root.innerHTML = `
+    <div class="row-between" style="margin-bottom:1rem">
+      <div class="row">
+        <a class="btn btn-ghost btn-sm" href="#/inventory">← Inventory</a>
+        ${v.plate ? `<span class="plate">${esc(fmtPlate(v.plate))}</span>` : ''}
+        <h2>${esc(carName(v))}</h2>
+      </div>
+      <div class="row">
+        <select id="v-status" style="width:auto">
+          ${Object.entries(STATUS_LABEL).map(([k, l]) =>
+            `<option value="${k}" ${v.status === k ? 'selected' : ''}>${l}</option>`).join('')}
+        </select>
+        <button class="btn btn-sm btn-danger" id="v-delete">Delete</button>
+      </div>
+    </div>
+
+    <div class="detail-grid">
+      <div class="stack">
+        <section class="card pad">
+          <div class="gallery" id="v-gallery">
+            ${(v.photos || []).map((p, i) => `<img src="${p}" alt="Photo ${i + 1}" data-i="${i}" title="Click to remove">`).join('')}
+            <label class="add-photo">+<input type="file" accept="image/*" multiple hidden id="v-photo-input"></label>
+          </div>
+        </section>
+
+        <section class="card pad">
+          <div class="row-between" style="margin-bottom:.8rem">
+            <h3>Listing description</h3>
+            <button class="btn btn-sm btn-primary" id="v-write">✨ Write listing</button>
+          </div>
+          <textarea id="v-desc" placeholder="Click “Write listing” and I will draft it from the details above.">${esc(v.description || '')}</textarea>
+          <div class="row" style="margin-top:.6rem">
+            <button class="btn btn-sm" id="v-desc-save">Save</button>
+            <button class="btn btn-sm" id="v-desc-copy">Copy</button>
+          </div>
+        </section>
+
+        ${motHistoryPanel(v)}
+
+        <section class="card pad">
+          <div class="row-between" style="margin-bottom:.8rem">
+            <h3>Activity &amp; calls</h3>
+            <div class="row">
+              <button class="btn btn-sm btn-primary" id="v-log-call">＋ Log a call</button>
+              <button class="btn btn-sm" id="v-log-other">Other activity</button>
+            </div>
+          </div>
+          ${events.length ? `<div class="timeline">${events.map(e => `
+            <div class="tl-item">
+              <span class="tl-dot" style="background:${EVENT_COLOUR[e.type] || 'var(--series-1)'}"></span>
+              <div>
+                <div class="tl-body"><b>${EVENT_LABEL[e.type] || e.type}</b>${e.contactName ? ' — ' + esc(e.contactName) : ''}${e.amount ? ' · offered ' + money(e.amount) : ''}
+                  ${e.notes ? `<div class="muted">${esc(e.notes)}</div>` : ''}</div>
+                <div class="tl-time">${fmtDate(e.at)} · ${ago(e.at)}</div>
+              </div>
+            </div>`).join('')}</div>`
+            : '<p class="small muted">Nothing logged yet. Every call you record here sharpens the pricing advice.</p>'}
+        </section>
+      </div>
+
+      <div class="stack">
+        <section class="card tile">
+          <span class="label">Screen price</span>
+          <span class="value nums">${money(v.askingPrice)}</span>
+          <span class="sub">${v.purchasePrice ? `Paid ${money(v.purchasePrice)} · margin <b class="${margin >= 0 ? 'delta-up' : ''}">${money(margin)}</b>` : 'Purchase price not set'}</span>
+        </section>
+
+        <div class="grid" style="grid-template-columns:1fr 1fr">
+          <div class="card tile"><span class="label">Calls</span><span class="value nums">${calls}</span></div>
+          <div class="card tile"><span class="label">Days in stock</span><span class="value nums">${daysBetween(v.createdAt)}</span></div>
+        </div>
+
+        <section class="card pad">
+          <div class="row-between" style="margin-bottom:.6rem">
+            <h3>Price check</h3>
+            <button class="btn btn-sm btn-primary" id="v-price">✨ Run</button>
+          </div>
+          <div id="v-price-out" class="small muted">Ask for a read on whether this car is priced right.</div>
+        </section>
+
+        <section class="card pad">
+          <h3 style="margin-bottom:.7rem">Details</h3>
+          <dl class="spec">
+            ${[['Stock ref', v.stockRef], ['VIN', v.vin], ['Mileage', v.mileage ? num(v.mileage) + ' mi' : ''],
+               ['Fuel', v.fuel], ['Gearbox', v.transmission], ['Body', v.body],
+               ['Engine', v.engine ? v.engine + ' cc' : ''],
+               ['Battery', v.batteryKwh ? v.batteryKwh + ' kWh' : ''],
+               ['Range', v.rangeMiles ? num(v.rangeMiles) + ' mi' : ''],
+               ['Colour', v.colour], ['Doors', v.doors], ['Owners', v.owners],
+               ['Service history', { full: 'Full', part: 'Part', none: 'None' }[v.serviceHistory]],
+               ['MOT expires', v.motExpiry ? fmtDate(v.motExpiry) : ''],
+               ['Condition', { excellent: 'Excellent', good: 'Good', fair: 'Fair', work: 'Needs work' }[v.condition]],
+               ['Added', fmtDate(v.createdAt)]]
+              .filter(([, val]) => val != null && val !== '')
+              .map(([k, val]) => `<dt>${k}</dt><dd>${esc(val)}</dd>`).join('')}
+          </dl>
+          ${v.conditionNotes ? `<p class="small" style="margin-top:.7rem"><b>Notes:</b> ${esc(v.conditionNotes)}</p>` : ''}
+          ${v.features?.length ? `<div class="choices" style="margin-top:.8rem">${v.features.map(f =>
+            `<span class="pill">${esc(f)}</span>`).join('')}</div>` : ''}
+          <button class="btn btn-sm" style="margin-top:.9rem" id="v-edit">Edit details</button>
+        </section>
+      </div>
+    </div>`;
+
+  $('#v-status').onchange = (e) => {
+    v.status = e.target.value;
+    if (v.status === 'sold' && !v.soldPrice) {
+      const p = prompt('What did it sell for?', v.askingPrice || '');
+      if (p) v.soldPrice = Number(p);
+      v.soldAt = new Date().toISOString();
+    }
+    v.updatedAt = new Date().toISOString();
+    save(); toast('Status updated.'); render();
+  };
+
+  $('#v-delete').onclick = () => {
+    if (!confirm(`Delete ${carName(v)}? This cannot be undone.`)) return;
+    DB.vehicles = DB.vehicles.filter(x => x.id !== v.id);
+    DB.events = DB.events.filter(e => e.vehicleId !== v.id);
+    save(); toast('Vehicle deleted.'); location.hash = '#/inventory';
+  };
+
+  $('#v-photo-input').onchange = async (e) => {
+    for (const file of e.target.files) v.photos.push(await shrinkImage(file));
+    save(); render();
+  };
+  $$('#v-gallery img').forEach(img => img.onclick = () => {
+    if (!confirm('Remove this photo?')) return;
+    v.photos.splice(Number(img.dataset.i), 1); save(); render();
+  });
+
+  $('#v-desc-save').onclick = () => { v.description = $('#v-desc').value; save(); toast('Description saved.'); };
+  $('#v-desc-copy').onclick = async () => {
+    await navigator.clipboard.writeText($('#v-desc').value); toast('Copied to clipboard.');
+  };
+
+  $('#v-write').onclick = async () => {
+    const btn = $('#v-write'); btn.disabled = true; btn.textContent = 'Writing…';
+    const hosted = await AI.chat(
+      'You write listings for a UK used-car dealership. Warm, factual, no hype, no invented facts. ' +
+      'Three or four short paragraphs. Never mention information you were not given.',
+      'Write an advert for this car:\n' + JSON.stringify({
+        ...v, photos: undefined, id: undefined, userId: undefined,
+      }, null, 1));
+    $('#v-desc').value = hosted || builtinDescription(v);
+    v.description = $('#v-desc').value;
+    save();
+    btn.disabled = false; btn.textContent = '✨ Write listing';
+    toast(hosted ? 'Listing written.' : 'Listing written with the built-in engine.');
+  };
+
+  $('#v-price').onclick = async () => {
+    const out = $('#v-price-out');
+    out.textContent = 'Thinking…';
+    const local = priceAdvice(v);
+    const hosted = await AI.chat(
+      'You are a used-car pricing manager. Be blunt and concrete. Under 140 words. ' +
+      'Give a number and the reasoning. Never invent market data you were not given.',
+      `Vehicle: ${JSON.stringify({ ...v, photos: undefined }, null, 1)}\n` +
+      `Days in stock: ${daysBetween(v.createdAt)}. Calls: ${calls}.\n` +
+      `My own rule-based estimate: ${local.verdict}`);
+    out.style.color = 'var(--ink)';
+    out.textContent = hosted || (local.verdict + '\n\n' + local.reasons.map(r => '• ' + r).join('\n'));
+    out.style.whiteSpace = 'pre-wrap';
+    if (local.suggested) {
+      const b = document.createElement('button');
+      b.className = 'btn btn-sm'; b.style.marginTop = '.7rem';
+      b.textContent = `Set price to ${money(local.suggested)}`;
+      b.onclick = () => {
+        v.askingPrice = local.suggested; v.updatedAt = new Date().toISOString();
+        save(); toast('Price updated.'); render();
+      };
+      out.after(b);
+    }
+  };
+
+  $('#v-log-call').onclick = () => logEventDialog(v, 'call');
+  $('#v-log-other').onclick = () => logEventDialog(v, 'enquiry');
+  $('#v-edit').onclick = () => editVehicleDialog(v);
+}
+
+/*
+   MOT history, straight from DVSA. The odometer readings are the useful part:
+   a mileage that climbs steadily is a car that was used normally, and a year
+   that barely moves is a question a buyer will eventually ask.
+*/
+function motHistoryPanel(v) {
+  const tests = (v.motTests || []).filter(t => t.date);
+  if (!tests.length) return '';
+
+  const withOdo = tests.filter(t => t.odometer);
+  const maxOdo = Math.max(1, ...withOdo.map(t => t.odometer));
+  const recent = tests[0];
+  const advisories = recent.advisories || [];
+
+  // Average miles a year across the readings we have.
+  let perYear = null;
+  if (withOdo.length >= 2) {
+    const first = withOdo[withOdo.length - 1], last = withOdo[0];
+    const years = (new Date(last.date) - new Date(first.date)) / (365.25 * 86400000);
+    if (years > 0.5) perYear = Math.round((last.odometer - first.odometer) / years);
+  }
+
+  return `
+    <section class="card pad">
+      <div class="row-between" style="margin-bottom:.2rem">
+        <h3>MOT history</h3>
+        <span class="pill pill-${recent.result === 'PASSED' ? 'in_stock' : 'reserved'}">
+          ${recent.result === 'PASSED' ? 'Last test passed' : 'Last test failed'}</span>
+      </div>
+      <p class="small muted" style="margin-bottom:.9rem">
+        ${tests.length} test${tests.length === 1 ? '' : 's'} on record${
+          perYear ? ` · averaging ${num(perYear)} miles a year` : ''}.
+      </p>
+
+      ${withOdo.length ? `<div class="bars">${withOdo.map(t => `
+        <div class="bar-row" title="${fmtDate(t.date)}: ${num(t.odometer)} miles">
+          <span class="name">${fmtDate(t.date)}${t.result === 'PASSED' ? '' : ' · failed'}</span>
+          <span class="bar-track"><span class="bar-fill" style="width:${Math.max(2, (t.odometer / maxOdo) * 100)}%${
+            t.result === 'PASSED' ? '' : ';background:var(--series-2)'}"></span></span>
+          <span class="val">${num(t.odometer)}</span>
+        </div>`).join('')}</div>`
+        : '<p class="small muted">No odometer readings recorded.</p>'}
+
+      ${advisories.length ? `
+        <div style="margin-top:1rem;border-top:1px solid var(--line);padding-top:.8rem">
+          <h4 class="small" style="margin-bottom:.4rem">Advisories at the last test</h4>
+          <ul class="small muted" style="margin:0;padding-left:1.1rem;line-height:1.5">
+            ${advisories.slice(0, 6).map(a => `<li>${esc(a)}</li>`).join('')}
+          </ul>
+          <p class="small" style="margin-top:.6rem">
+            Sort these before a buyer finds them, or price them in.
+          </p>
+        </div>` : ''}
+    </section>`;
+}
+
+const EVENT_LABEL = {
+  call: 'Phone call', enquiry: 'Online enquiry', viewing: 'Viewing',
+  test_drive: 'Test drive', offer: 'Offer made', note: 'Note', price_change: 'Price changed',
+};
+const EVENT_COLOUR = {
+  call: 'var(--series-1)', enquiry: 'var(--series-3)', viewing: 'var(--series-2)',
+  test_drive: 'var(--series-2)', offer: 'var(--good)', note: 'var(--muted)',
+};
+
+function modal(html, onMount) {
+  const back = document.createElement('div');
+  back.className = 'modal-back';
+  back.innerHTML = `<div class="card modal pad">${html}</div>`;
+  back.onclick = (e) => { if (e.target === back) back.remove(); };
+  document.body.append(back);
+  onMount?.(back, () => back.remove());
+  back.querySelector('input, select, textarea')?.focus();
+  return back;
+}
+
+function logEventDialog(v, defaultType) {
+  modal(`
+    <h2 style="margin-bottom:1rem">Log activity — ${esc(carName(v))}</h2>
+    <div class="field">
+      <label for="e-type">Type</label>
+      <select id="e-type">${Object.entries(EVENT_LABEL).filter(([k]) => k !== 'price_change')
+        .map(([k, l]) => `<option value="${k}" ${k === defaultType ? 'selected' : ''}>${l}</option>`).join('')}</select>
+    </div>
+    <div class="field"><label for="e-name">Caller name</label><input id="e-name" type="text" placeholder="Optional"></div>
+    <div class="field"><label for="e-phone">Phone</label><input id="e-phone" type="text" placeholder="Optional"></div>
+    <div class="field">
+      <label for="e-source">Where did they come from?</label>
+      <select id="e-source">
+        <option value="">Not sure</option>
+        <option>Autotrader</option><option>Facebook</option><option>Gumtree</option>
+        <option>Our website</option><option>Walk-in</option><option>Repeat customer</option>
+        <option>Referral</option>
+      </select>
+    </div>
+    <div class="field"><label for="e-amount">Amount offered</label><input id="e-amount" type="number" placeholder="Optional"></div>
+    <div class="field"><label for="e-notes">Notes</label><textarea id="e-notes" placeholder="What was said?"></textarea></div>
+    <label class="row small" style="margin-bottom:1rem">
+      <input type="checkbox" id="e-lead" checked style="width:auto"> Also add them to Enquiries so I can chase them
+    </label>
+    <div class="row">
+      <button class="btn btn-primary" id="e-save">Save</button>
+      <button class="btn btn-ghost" id="e-cancel">Cancel</button>
+    </div>`, (back, close) => {
+    $('#e-cancel', back).onclick = close;
+    $('#e-save', back).onclick = () => {
+      const ev = {
+        id: uid(), userId: DB.session, vehicleId: v.id,
+        type: $('#e-type', back).value,
+        contactName: $('#e-name', back).value.trim(),
+        contactPhone: $('#e-phone', back).value.trim(),
+        source: $('#e-source', back).value,
+        amount: Number($('#e-amount', back).value) || null,
+        notes: $('#e-notes', back).value.trim(),
+        at: new Date().toISOString(),
+      };
+      DB.events.push(ev);
+      if ($('#e-lead', back).checked && (ev.contactName || ev.contactPhone)) {
+        DB.leads.push({
+          id: uid(), userId: DB.session, vehicleId: v.id,
+          name: ev.contactName, phone: ev.contactPhone, email: '',
+          source: ev.source, stage: 'new', budget: ev.amount, notes: ev.notes,
+          createdAt: ev.at, lastContactAt: ev.at,
+        });
+      }
+      save(); close(); toast('Logged.'); render();
+    };
+  });
+}
+
+const EDIT_FIELDS = [
+  ['stockRef', 'Stock ref'], ['plate', 'Number plate'], ['vin', 'VIN'],
+  ['make', 'Make'], ['model', 'Model'], ['variant', 'Variant'],
+  ['year', 'Year', 'number'], ['mileage', 'Mileage', 'number'],
+  ['fuel', 'Fuel'], ['transmission', 'Gearbox'], ['body', 'Body'],
+  ['engine', 'Engine (cc)', 'number'], ['colour', 'Colour'],
+  ['doors', 'Doors', 'number'], ['owners', 'Previous owners', 'number'],
+  ['motExpiry', 'MOT expires', 'date'],
+  ['purchasePrice', 'What you paid', 'number'], ['askingPrice', 'Screen price', 'number'],
+  ['soldPrice', 'Sold for', 'number'], ['conditionNotes', 'Condition notes'],
+];
+
+function editVehicleDialog(v) {
+  modal(`
+    <h2 style="margin-bottom:1rem">Edit ${esc(carName(v))}</h2>
+    ${EDIT_FIELDS.map(([k, label, type]) => `
+      <div class="field">
+        <label for="ed-${k}">${label}</label>
+        <input id="ed-${k}" type="${type || 'text'}" value="${esc(v[k] ?? '')}">
+      </div>`).join('')}
+    <div class="row">
+      <button class="btn btn-primary" id="ed-save">Save changes</button>
+      <button class="btn btn-ghost" id="ed-cancel">Cancel</button>
+    </div>`, (back, close) => {
+    $('#ed-cancel', back).onclick = close;
+    $('#ed-save', back).onclick = () => {
+      const oldPrice = v.askingPrice;
+      for (const [k, , type] of EDIT_FIELDS) {
+        const raw = $('#ed-' + k, back).value.trim();
+        v[k] = type === 'number' ? (Number(raw) || null) : raw;
+      }
+      if (oldPrice && v.askingPrice && oldPrice !== v.askingPrice) {
+        DB.events.push({
+          id: uid(), userId: DB.session, vehicleId: v.id, type: 'price_change',
+          notes: `${money(oldPrice)} → ${money(v.askingPrice)}`,
+          at: new Date().toISOString(), contactName: '', contactPhone: '', source: '', amount: null,
+        });
+      }
+      v.updatedAt = new Date().toISOString();
+      save(); close(); toast('Saved.'); render();
+    };
+  });
+}
+
+/* ---------------------------------------------------------------- enquiries */
+
+const STAGES = [
+  ['new', 'New'], ['contacted', 'Contacted'], ['viewing', 'Viewing booked'],
+  ['negotiating', 'Negotiating'], ['won', 'Sold'], ['lost', 'Lost'],
+];
+
+function viewLeads(root) {
+  const leads = myLeads().sort((a, b) => (b.lastContactAt || b.createdAt).localeCompare(a.lastContactAt || a.createdAt));
+
+  root.innerHTML = `
+    <div class="row-between" style="margin-bottom:1rem">
+      <p class="small muted">Everyone who has called about a car, and where you left it.</p>
+      <button class="btn btn-primary btn-sm" id="l-add">＋ Add enquiry</button>
+    </div>
+    ${leads.length ? `<div class="card" style="overflow:auto"><table>
+      <thead><tr><th>Contact</th><th>Vehicle</th><th>Source</th><th class="num">Budget</th><th>Last contact</th><th>Stage</th><th></th></tr></thead>
+      <tbody>${leads.map(l => {
+        const v = l.vehicleId ? carById(l.vehicleId) : null;
+        const cold = daysBetween(l.lastContactAt || l.createdAt) >= 3 && !['won', 'lost'].includes(l.stage);
+        return `<tr>
+          <td><b>${esc(l.name || 'Unknown')}</b><div class="small muted">${esc(l.phone || l.email || '')}</div></td>
+          <td class="small">${v ? esc(carName(v)) : '<span class="muted">—</span>'}</td>
+          <td class="small">${esc(l.source || '—')}</td>
+          <td class="num">${money(l.budget)}</td>
+          <td class="small ${cold ? '' : 'muted'}" ${cold ? 'style="color:var(--serious);font-weight:600"' : ''}>${ago(l.lastContactAt || l.createdAt)}</td>
+          <td><select data-stage="${l.id}" style="width:auto">${STAGES.map(([k, lab]) =>
+            `<option value="${k}" ${l.stage === k ? 'selected' : ''}>${lab}</option>`).join('')}</select></td>
+          <td><button class="btn btn-sm" data-reply="${l.id}">✨ Reply</button></td>
+        </tr>`;
+      }).join('')}</tbody></table></div>`
+      : `<div class="card pad empty"><div class="big">📞</div>
+         <p style="margin-top:.5rem">No enquiries yet. They appear here automatically when you log a call against a car.</p></div>`}`;
+
+  $('#l-add').onclick = () => addLeadDialog();
+  $$('[data-stage]').forEach(sel => sel.onchange = () => {
+    const l = DB.leads.find(x => x.id === sel.dataset.stage);
+    l.stage = sel.value; l.lastContactAt = new Date().toISOString();
+    save(); toast('Updated.'); render();
+  });
+  $$('[data-reply]').forEach(btn => btn.onclick = () => replyDialog(
+    DB.leads.find(x => x.id === btn.dataset.reply)));
+}
+
+function addLeadDialog() {
+  const cars = myCars().filter(c => c.status !== 'sold');
+  modal(`
+    <h2 style="margin-bottom:1rem">New enquiry</h2>
+    <div class="field"><label for="nl-name">Name</label><input id="nl-name" type="text"></div>
+    <div class="field"><label for="nl-phone">Phone</label><input id="nl-phone" type="text"></div>
+    <div class="field"><label for="nl-email">Email</label><input id="nl-email" type="email"></div>
+    <div class="field"><label for="nl-car">Interested in</label>
+      <select id="nl-car"><option value="">Not sure yet</option>
+        ${cars.map(c => `<option value="${c.id}">${esc(carName(c))}</option>`).join('')}</select></div>
+    <div class="field"><label for="nl-budget">Budget</label><input id="nl-budget" type="number"></div>
+    <div class="field"><label for="nl-notes">Notes</label><textarea id="nl-notes"></textarea></div>
+    <div class="row"><button class="btn btn-primary" id="nl-save">Save</button>
+      <button class="btn btn-ghost" id="nl-cancel">Cancel</button></div>`, (back, close) => {
+    $('#nl-cancel', back).onclick = close;
+    $('#nl-save', back).onclick = () => {
+      DB.leads.push({
+        id: uid(), userId: DB.session,
+        vehicleId: $('#nl-car', back).value || null,
+        name: $('#nl-name', back).value.trim(),
+        phone: $('#nl-phone', back).value.trim(),
+        email: $('#nl-email', back).value.trim(),
+        budget: Number($('#nl-budget', back).value) || null,
+        notes: $('#nl-notes', back).value.trim(),
+        source: '', stage: 'new',
+        createdAt: new Date().toISOString(), lastContactAt: new Date().toISOString(),
+      });
+      save(); close(); toast('Enquiry added.'); render();
+    };
+  });
+}
+
+function builtinReply(lead, v) {
+  const name = lead.name ? lead.name.split(' ')[0] : 'there';
+  const car = v ? carName(v) : 'the car you asked about';
+  const price = v?.askingPrice ? ` It is up at ${money(v.askingPrice)}.` : '';
+  const hook = v?.mileage ? ` It has covered ${num(v.mileage)} miles${v.serviceHistory === 'full' ? ' and comes with a full service history' : ''}.` : '';
+  return `Hi ${name},\n\nThanks for getting in touch about the ${car} — it is still available.${price}${hook}\n\n` +
+    `I am happy to hold it for a viewing. What does the rest of this week look like for you? ` +
+    `If you have a car to part exchange, send me the registration and mileage and I will get you a figure before you come down.\n\n` +
+    `Best regards,\n${me().dealership}`;
+}
+
+function replyDialog(lead) {
+  const v = lead.vehicleId ? carById(lead.vehicleId) : null;
+  const back = modal(`
+    <h2 style="margin-bottom:.4rem">Reply to ${esc(lead.name || 'enquiry')}</h2>
+    <p class="small muted" style="margin-bottom:1rem">${v ? esc(carName(v)) : 'No vehicle attached'}</p>
+    <textarea id="rp-text" style="min-height:220px">${esc(builtinReply(lead, v))}</textarea>
+    <div class="row" style="margin-top:.8rem">
+      <button class="btn btn-primary" id="rp-copy">Copy</button>
+      <button class="btn" id="rp-ai">✨ Rewrite with AI</button>
+      <button class="btn btn-ghost" id="rp-close">Close</button>
+    </div>`, (back, close) => {
+    $('#rp-close', back).onclick = close;
+    $('#rp-copy', back).onclick = async () => {
+      await navigator.clipboard.writeText($('#rp-text', back).value);
+      lead.lastContactAt = new Date().toISOString();
+      if (lead.stage === 'new') lead.stage = 'contacted';
+      save(); toast('Copied — marked as contacted.'); close(); render();
+    };
+    $('#rp-ai', back).onclick = async () => {
+      const btn = $('#rp-ai', back); btn.disabled = true; btn.textContent = 'Writing…';
+      const out = await AI.chat(
+        'You write short, friendly, professional replies for a car dealership. British English. ' +
+        'No hard sell, no invented facts, always end with a clear next step.',
+        `Customer: ${JSON.stringify(lead)}\nVehicle: ${JSON.stringify(v ? { ...v, photos: undefined } : null)}\n` +
+        `Dealership: ${me().dealership}\n\nWrite the reply.`);
+      if (out) $('#rp-text', back).value = out;
+      btn.disabled = false; btn.textContent = '✨ Rewrite with AI';
+    };
+  });
+  return back;
+}
+
+/* ---------------------------------------------------------------- assistant */
+
+let chatLog = [];
+
+function viewAssistant(root) {
+  root.innerHTML = `
+    <div class="card pad chat">
+      <div class="chat-log" id="chat-log"></div>
+      <div class="suggestions" id="chat-sugg">
+        ${['Which cars had no calls?', 'What should I reprice?', "What's my oldest stock?", 'How much profit have I made?']
+          .map(s => `<button class="btn btn-sm" data-s="${esc(s)}">${esc(s)}</button>`).join('')}
+      </div>
+      <form class="chat-form" id="chat-form">
+        <input type="text" id="chat-in" placeholder="Ask about your stock, pricing, anything…" autocomplete="off">
+        <button class="btn btn-primary" type="submit">Send</button>
+      </form>
+    </div>
+    <p class="small muted" style="text-align:center;margin-top:.8rem">
+      ${AI.configured()
+        ? 'Connected to your AI provider. It sees a summary of your stock, never your customers.'
+        : 'Running on the free built-in engine — no key, no cost, works offline. Add a provider in Settings for open-ended conversation.'}
+    </p>`;
+
+  const log = $('#chat-log');
+  const paint = () => {
+    log.innerHTML = chatLog.length
+      ? chatLog.map(m => `<div class="msg msg-${m.role}">${esc(m.text)}</div>`).join('')
+      : `<div class="msg msg-ai">Ask me anything about your stock. I know every car, every call and every day it has been sitting there.</div>`;
+    log.scrollTop = log.scrollHeight;
+  };
+  paint();
+
+  const ask = async (question) => {
+    chatLog.push({ role: 'user', text: question });
+    paint();
+    chatLog.push({ role: 'ai', text: '…' });
+    paint();
+    const local = builtinAnswer(question);
+    const hosted = await AI.chat(
+      'You are the sales manager for a used-car dealership, talking to the owner. ' +
+      'Direct, practical, British English, no filler. Use only the stock data provided. ' +
+      'Money is in ' + (me().settings.currency || 'GBP') + '.',
+      `Stock:\n${JSON.stringify(inventorySnapshot(), null, 1)}\n\n` +
+      `My own analysis: ${local}\n\nOwner asks: ${question}`);
+    chatLog[chatLog.length - 1].text = hosted || local;
+    paint();
+  };
+
+  $('#chat-form').onsubmit = (e) => {
+    e.preventDefault();
+    const q = $('#chat-in').value.trim();
+    if (!q) return;
+    $('#chat-in').value = '';
+    ask(q);
+  };
+  $$('#chat-sugg [data-s]').forEach(b => b.onclick = () => ask(b.dataset.s));
+}
+
+/* ---------------------------------------------------------------- settings */
+
+function viewSettings(root) {
+  const u = me();
+  const s = u.settings;
+  const bytes = new Blob([localStorage.getItem(KEY) || '']).size;
+
+  root.innerHTML = `
+    <div class="stack" style="max-width:640px">
+      <section class="card pad">
+        <h3 style="margin-bottom:.9rem">Dealership</h3>
+        <div class="field"><label for="st-name">Name</label><input id="st-name" type="text" value="${esc(u.dealership)}"></div>
+        <div class="field"><label for="st-cur">Currency</label>
+          <select id="st-cur">${Object.keys(CURRENCIES).map(c =>
+            `<option ${s.currency === c ? 'selected' : ''}>${c}</option>`).join('')}</select></div>
+        <div class="field"><label for="st-margin">Target margin (%)</label>
+          <input id="st-margin" type="number" value="${s.targetMargin ?? 12}">
+          <span class="hint">Used for the suggested screen price.</span></div>
+        <button class="btn btn-primary" id="st-save">Save</button>
+      </section>
+
+      <section class="card pad">
+        <div class="row-between" style="margin-bottom:.4rem">
+          <h3>Number plate lookup</h3>
+          <button class="btn btn-sm" id="pl-check">Check now</button>
+        </div>
+        <div id="pl-status" class="small muted">Checking…</div>
+      </section>
+
+      <section class="card pad">
+        <h3 style="margin-bottom:.4rem">AI engine</h3>
+        <p class="small muted" style="margin-bottom:.9rem">
+          The built-in engine is free, instant, works offline and needs no account — it handles pricing,
+          listings, replies and stock questions. Connect a hosted model if you want open-ended
+          conversation and richer writing. Both Google&nbsp;AI&nbsp;Studio and Groq give away a
+          generous free tier. Your key is stored in this browser only.
+        </p>
+        <div class="field"><label for="st-prov">Provider</label>
+          <select id="st-prov">
+            <option value="builtin" ${s.aiProvider === 'builtin' ? 'selected' : ''}>Built-in (free, offline)</option>
+            <option value="gemini" ${s.aiProvider === 'gemini' ? 'selected' : ''}>Google Gemini (free tier)</option>
+            <option value="openai" ${s.aiProvider === 'openai' ? 'selected' : ''}>Groq / OpenAI-compatible</option>
+          </select></div>
+        <div id="ai-extra" ${s.aiProvider === 'builtin' || !s.aiProvider ? 'hidden' : ''}>
+          <div class="field"><label for="st-key">API key</label>
+            <input id="st-key" type="password" value="${esc(s.aiKey || '')}" placeholder="Paste your key"></div>
+          <div class="field"><label for="st-model">Model</label>
+            <input id="st-model" type="text" value="${esc(s.aiModel || '')}"
+              placeholder="${s.aiProvider === 'gemini' ? 'gemini-2.0-flash' : 'llama-3.3-70b-versatile'}"></div>
+          <div class="field" id="base-wrap" ${s.aiProvider !== 'openai' ? 'hidden' : ''}>
+            <label for="st-base">API base URL</label>
+            <input id="st-base" type="text" value="${esc(s.aiBase || '')}" placeholder="https://api.groq.com/openai/v1">
+            <span class="hint">Works with Groq, OpenRouter, Together, or any OpenAI-compatible endpoint.</span>
+          </div>
+        </div>
+        <button class="btn btn-primary" id="ai-save">Save AI settings</button>
+        <button class="btn" id="ai-test">Test connection</button>
+        <p class="small" id="ai-test-out" style="margin-top:.6rem"></p>
+      </section>
+
+      <section class="card pad">
+        <h3 style="margin-bottom:.4rem">Your data</h3>
+        <p class="small muted" style="margin-bottom:.9rem">
+          Everything lives in this browser (${(bytes / 1024).toFixed(0)} KB used).
+          Export regularly — clearing site data wipes it.
+        </p>
+        <div class="row" style="flex-wrap:wrap">
+          <button class="btn" id="d-export">Export backup</button>
+          <label class="btn">Import backup<input type="file" accept="application/json" hidden id="d-import"></label>
+          <button class="btn" id="d-demo">Load demo data</button>
+          <button class="btn btn-danger" id="d-wipe">Delete everything</button>
+        </div>
+      </section>
+    </div>`;
+
+  $('#st-save').onclick = () => {
+    u.dealership = $('#st-name').value.trim() || u.dealership;
+    s.currency = $('#st-cur').value;
+    s.targetMargin = Number($('#st-margin').value) || 12;
+    save(); toast('Saved.'); render();
+  };
+
+  const paintPlateStatus = async () => {
+    const el = $('#pl-status');
+    if (!el) return;
+    el.innerHTML = '<span class="muted">Checking…</span>';
+    plateServiceOffline = false;
+    const st = await probePlateService();
+
+    if (st.state === 'ready') {
+      el.innerHTML = `
+        <p style="color:var(--good-text);font-weight:600">✅ Lookup is working.</p>
+        <ul style="margin:.5rem 0 0;padding-left:1.1rem;line-height:1.6">
+          <li>DVLA — ${st.dvla ? 'connected' : '<b>not set up</b>: add DVLA_API_KEY for tax status and colour'}</li>
+          <li>MOT history — ${st.mot ? 'connected' : '<b>not set up</b>: add MOT_CLIENT_ID, MOT_CLIENT_SECRET and MOT_API_KEY for the model and mileage'}</li>
+        </ul>`;
+      return;
+    }
+
+    const help = PLATE_SERVICE_HELP[st.state] || PLATE_SERVICE_HELP.error;
+    el.innerHTML = `
+      <p style="color:${help.ok ? 'var(--ink)' : 'var(--critical)'};font-weight:600">
+        ${help.ok ? 'ℹ️' : '❌'} ${esc(help.title)}</p>
+      <p style="margin-top:.4rem">${esc(help.body)}</p>
+      <p style="margin-top:.6rem">${help.ok
+        ? 'To have it identify cars automatically from the registration, deploy the functions folder alongside this file and add your DVLA and MOT keys — the README has the steps.'
+        : 'Meanwhile the plate is still read for its year and issuing office. Full instructions are in the README.'}</p>`;
+  };
+  paintPlateStatus();
+  $('#pl-check').onclick = paintPlateStatus;
+
+  $('#st-prov').onchange = (e) => {
+    $('#ai-extra').hidden = e.target.value === 'builtin';
+    $('#base-wrap').hidden = e.target.value !== 'openai';
+  };
+  $('#ai-save').onclick = () => {
+    s.aiProvider = $('#st-prov').value;
+    s.aiKey = $('#st-key')?.value.trim() || '';
+    s.aiModel = $('#st-model')?.value.trim() || '';
+    s.aiBase = $('#st-base')?.value.trim() || '';
+    save(); toast('AI settings saved.');
+  };
+  $('#ai-test').onclick = async () => {
+    const out = $('#ai-test-out');
+    $('#ai-save').click();
+    if (!AI.configured()) { out.textContent = 'Using the built-in engine — nothing to test, it always works.'; return; }
+    out.textContent = 'Testing…';
+    const r = await AI.chat('Reply with exactly: connected', 'test');
+    out.textContent = r ? '✅ Connected. Model replied: ' + r.trim().slice(0, 60) : '❌ Could not reach the provider — check the key and model name.';
+  };
+
+  $('#d-export').onclick = () => {
+    const blob = new Blob([JSON.stringify(DB, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `forecourt-backup-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click(); URL.revokeObjectURL(a.href);
+  };
+  $('#d-import').onchange = (e) => {
+    const file = e.target.files[0]; if (!file) return;
+    if (!confirm('Importing replaces everything currently in this browser. Continue?')) return;
+    const r = new FileReader();
+    r.onload = () => {
+      try {
+        DB = Object.assign(blank(), JSON.parse(r.result));
+        save(); toast('Backup restored.'); render();
+      } catch { toast('That file could not be read.'); }
+    };
+    r.readAsText(file);
+  };
+  $('#d-demo').onclick = () => { seedDemo(); toast('Demo stock added.'); location.hash = '#/dashboard'; render(); };
+  $('#d-wipe').onclick = () => {
+    if (!confirm('Delete every vehicle, enquiry and account in this browser? This cannot be undone.')) return;
+    localStorage.removeItem(KEY); DB = blank(); render();
+  };
+}
+
+/* ------------------------------------------------------------- demo seeding */
+
+function seedDemo() {
+  const daysAgo = (d) => new Date(Date.now() - d * 86400000).toISOString();
+  const samples = [
+    { plate: 'AB19 XYZ', make: 'Ford', model: 'Focus', variant: 'ST-Line 1.0 EcoBoost', year: 2019,
+      mileage: 42300, fuel: 'Petrol', transmission: 'Manual', body: 'Hatchback', engine: 998,
+      colour: 'Magnetic grey', doors: 5, owners: 2, serviceHistory: 'full', condition: 'excellent',
+      purchasePrice: 9200, askingPrice: 11495, days: 12,
+      features: ['Apple CarPlay', 'Cruise control', 'Parking sensors', 'Alloy wheels'], calls: 7 },
+    { plate: 'LM68 KDR', make: 'Volkswagen', model: 'Golf', variant: 'GT TDI', year: 2018,
+      mileage: 78100, fuel: 'Diesel', transmission: 'Automatic', body: 'Hatchback', engine: 1968,
+      colour: 'Pearl white', doors: 5, owners: 3, serviceHistory: 'part', condition: 'good',
+      purchasePrice: 8800, askingPrice: 10995, days: 74,
+      features: ['Sat nav', 'Heated seats', 'DAB radio'], calls: 1 },
+    { plate: 'BD71 OPQ', make: 'Tesla', model: 'Model 3', variant: 'Long Range', year: 2021,
+      mileage: 31000, fuel: 'Electric', transmission: 'Automatic', body: 'Saloon',
+      batteryKwh: 75, rangeMiles: 290, colour: 'Solid black', doors: 4, owners: 1,
+      serviceHistory: 'full', condition: 'excellent', purchasePrice: 22500, askingPrice: 26995, days: 5,
+      features: ['Reversing camera', 'Adaptive cruise', 'Panoramic roof', 'Keyless entry'], calls: 11 },
+    { plate: 'YT15 FGH', make: 'Vauxhall', model: 'Corsa', variant: 'SRi 1.4', year: 2015,
+      mileage: 96500, fuel: 'Petrol', transmission: 'Manual', body: 'Hatchback', engine: 1398,
+      colour: 'Red', doors: 3, owners: 4, serviceHistory: 'none', condition: 'fair',
+      conditionNotes: 'Kerbed nearside alloys and a small dent on the tailgate.',
+      purchasePrice: 2600, askingPrice: 3995, days: 96, features: ['Air conditioning'], calls: 0 },
+  ];
+
+  for (const s of samples) {
+    const v = {
+      id: uid(), userId: DB.session, stockRef: 'S' + String(myCars().length + 1).padStart(3, '0'),
+      vin: '', photos: [], description: '', soldPrice: null, status: 'in_stock',
+      motExpiry: '', conditionNotes: '', ...s,
+      createdAt: daysAgo(s.days), updatedAt: daysAgo(0),
+    };
+    delete v.days; delete v.calls;
+    DB.vehicles.push(v);
+    for (let i = 0; i < s.calls; i++) {
+      DB.events.push({
+        id: uid(), userId: DB.session, vehicleId: v.id, type: i % 4 === 3 ? 'viewing' : 'call',
+        contactName: '', contactPhone: '', source: ['Autotrader', 'Facebook', 'Our website'][i % 3],
+        amount: null, notes: '', at: daysAgo(Math.max(0, s.days - i * 2 - 1)),
+      });
+    }
+  }
+  DB.leads.push({
+    id: uid(), userId: DB.session, vehicleId: DB.vehicles.at(-2).id,
+    name: 'Sarah Mitchell', phone: '07700 900142', email: '', source: 'Autotrader',
+    stage: 'contacted', budget: 26000, notes: 'Wants to part-exchange a 2016 Astra.',
+    createdAt: daysAgo(4), lastContactAt: daysAgo(4),
+  });
+  save();
+}
+
+/* ==========================================================================
+   Boot
+   ======================================================================== */
+
+$('#tab-login').onclick = () => switchTab(true);
+$('#tab-signup').onclick = () => switchTab(false);
+function switchTab(isLogin) {
+  $('#tab-login').setAttribute('aria-selected', String(isLogin));
+  $('#tab-signup').setAttribute('aria-selected', String(!isLogin));
+  $('#form-login').hidden = !isLogin;
+  $('#form-signup').hidden = isLogin;
+}
+
+$('#form-login').onsubmit = async (e) => {
+  e.preventDefault();
+  const err = $('#li-err'); err.hidden = true;
+  try {
+    await login({ email: $('#li-email').value, password: $('#li-pass').value });
+    location.hash = '#/dashboard';
+    render();
+  } catch (ex) { err.textContent = ex.message; err.hidden = false; }
+};
+
+$('#form-signup').onsubmit = async (e) => {
+  e.preventDefault();
+  const err = $('#su-err'); err.hidden = true;
+  try {
+    await signup({
+      dealership: $('#su-dealer').value,
+      email: $('#su-email').value,
+      password: $('#su-pass').value,
+    });
+    location.hash = '#/dashboard';
+    render();
+  } catch (ex) { err.textContent = ex.message; err.hidden = false; }
+};
+
+$('#btn-logout').onclick = () => { DB.session = null; save(); chatLog = []; render(); };
+$('#btn-menu').onclick = () => document.body.classList.toggle('nav-open');
+$('#btn-theme').onclick = () => {
+  const cur = document.documentElement.dataset.theme;
+  const next = cur === 'dark' ? 'light' : cur === 'light' ? '' : 'dark';
+  if (next) document.documentElement.dataset.theme = next;
+  else delete document.documentElement.dataset.theme;
+  DB.prefs.theme = next; save();
+};
+
+if (DB.prefs?.theme) document.documentElement.dataset.theme = DB.prefs.theme;
+addEventListener('hashchange', render);
+render();
+</script>
+</body>
+</html>
