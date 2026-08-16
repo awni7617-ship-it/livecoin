@@ -650,9 +650,12 @@ async function probePlateService() {
 }
 
 const PLATE_SERVICE_HELP = {
+  // Not an error — a single index.html is a perfectly good way to run this,
+  // it just cannot call DVLA or MOT history, because those need a server.
   no_function: {
-    title: 'Lookup is not deployed',
-    body: 'Only index.html was uploaded, so there is no server to make the lookup. Upload the whole folder — the functions/api/plate.js file is what does it — then set the keys in Settings.',
+    ok: true,
+    title: 'Running as a single file',
+    body: 'There is no server here to call DVLA or MOT history, so I read what the plate itself carries — the year and the issuing office — and you type the rest once. Cars you have had before still come back in full.',
   },
   no_keys: {
     title: 'Lookup is deployed but has no keys',
@@ -2305,10 +2308,12 @@ function viewSettings(root) {
 
     const help = PLATE_SERVICE_HELP[st.state] || PLATE_SERVICE_HELP.error;
     el.innerHTML = `
-      <p style="color:var(--critical);font-weight:600">❌ ${esc(help.title)}</p>
+      <p style="color:${help.ok ? 'var(--ink)' : 'var(--critical)'};font-weight:600">
+        ${help.ok ? 'ℹ️' : '❌'} ${esc(help.title)}</p>
       <p style="margin-top:.4rem">${esc(help.body)}</p>
-      <p style="margin-top:.6rem">Until it is set up the app reads what it can off the plate itself —
-      the year and the issuing office — and you fill in the rest. Full instructions are in the README.</p>`;
+      <p style="margin-top:.6rem">${help.ok
+        ? 'To have it identify cars automatically from the registration, deploy the functions folder alongside this file and add your DVLA and MOT keys — the README has the steps.'
+        : 'Meanwhile the plate is still read for its year and issuing office. Full instructions are in the README.'}</p>`;
   };
   paintPlateStatus();
   $('#pl-check').onclick = paintPlateStatus;
