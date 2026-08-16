@@ -295,6 +295,12 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
   font-size: .86rem; margin-bottom: 1rem; color: var(--ink);
 }
 .assist b { display: block; font-size: .74rem; text-transform: uppercase; letter-spacing: .05em; color: var(--brand); }
+.plate-entry { display: flex; gap: .6rem; align-items: stretch; }
+.plate-entry input {
+  background: #f5d20a; color: #111; border: 2px solid #b99f06; border-radius: 7px;
+  font-variant-numeric: tabular-nums;
+}
+.plate-entry input::placeholder { color: rgba(0,0,0,.35); }
 
 /* ============================================================
    Vehicle detail
@@ -593,6 +599,82 @@ function decodePlate(raw) {
   out.format = 'Other';
   out.note = 'Plate format not recognised — fill the details in below.';
   return out;
+}
+
+/** DVLA memory tags — the first letter of a current-style plate is where it was issued. */
+const PLATE_REGIONS = {
+  A: 'Anglia', B: 'Birmingham', C: 'Cymru', D: 'Deeside &amp; Chester', E: 'Essex',
+  F: 'Forest &amp; Fens', G: 'Garden of England', H: 'Hampshire &amp; Dorset', K: 'Northampton',
+  L: 'London', M: 'Manchester &amp; Merseyside', N: 'Newcastle', O: 'Oxford', P: 'Preston',
+  R: 'Reading', S: 'Scotland', V: 'Severn Valley', W: 'West of England', Y: 'Yorkshire',
+};
+
+/*
+   Plate identification, best source first:
+
+   1. A car you have entered before — instant and exact.
+   2. The DVLA Vehicle Enquiry Service, through the /api/plate function that
+      ships alongside this file. DVLA is free but the key must stay on the
+      server, so lookup only works once you deploy the function and set the
+      key (see the README). It returns make, colour, fuel, engine size, year
+      and MOT expiry — not the model, which is why the model box is still there.
+   3. Failing both, the plate itself: the registration period and issuing
+      office are readable straight off it, offline, with no service at all.
+*/
+let plateServiceOffline = false;
+
+async function lookupPlate(raw) {
+  const plate = String(raw || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  const offline = decodePlate(plate);
+  const region = PLATE_REGIONS[plate[0]];
+
+  const prior = DB.vehicles.find(v =>
+    v.userId === DB.session && v.plate.replace(/\s+/g, '') === plate);
+  if (prior) {
+    return {
+      plate, source: 'history', sourceLabel: 'You have had this car before',
+      note: `${carName(prior)} — I have filled in everything from the last time it was on your forecourt.`,
+      data: {
+        make: prior.make, model: prior.model, variant: prior.variant, year: prior.year,
+        fuel: prior.fuel, transmission: prior.transmission, engine: prior.engine,
+        colour: prior.colour, doors: prior.doors, body: prior.body,
+      },
+    };
+  }
+
+  try {
+    if (plateServiceOffline) throw new Error('lookup unavailable');
+    const res = await fetch('/api/plate?reg=' + encodeURIComponent(plate));
+    // A 501 (no key set) or 404 (function not deployed) will not change on the
+    // next plate, so stop asking for the rest of the session.
+    if (res.status === 501 || res.status === 404) plateServiceOffline = true;
+    if (res.ok) {
+      const v = await res.json();
+      if (v.make) {
+        const title = (s) => s ? s.charAt(0) + s.slice(1).toLowerCase() : '';
+        return {
+          plate, source: 'dvla', sourceLabel: 'Found at the DVLA',
+          note: [title(v.make), v.yearOfManufacture, title(v.colour), title(v.fuelType),
+                 v.engineCapacity ? v.engineCapacity + 'cc' : '',
+                 v.taxStatus ? 'Tax: ' + v.taxStatus : '',
+                 v.motStatus ? 'MOT: ' + v.motStatus : ''].filter(Boolean).join(' · ') +
+                '. Add the model and mileage below.',
+          data: {
+            make: title(v.make), year: v.yearOfManufacture, colour: title(v.colour),
+            fuel: title(v.fuelType), engine: v.engineCapacity,
+            motExpiry: v.motExpiryDate || '',
+          },
+        };
+      }
+    }
+  } catch { /* no function deployed, or offline — fall through */ }
+
+  return {
+    plate, source: 'offline', sourceLabel: 'Read from the plate',
+    note: [offline.note, region ? `Issued in ${region.replace(/&amp;/g, '&')}.` : '',
+           'DVLA lookup is not switched on, so fill in the rest below.'].filter(Boolean).join(' '),
+    data: { year: offline.year },
+  };
 }
 
 /*
@@ -1198,33 +1280,14 @@ const FEATURES = ['Air conditioning','Climate control','Sat nav','Apple CarPlay'
   'Cruise control','Parking sensors','Reversing camera','Heated seats','Leather seats','Panoramic roof',
   'Alloy wheels','Tow bar','Isofix','Keyless entry','Adaptive cruise','Lane assist','DAB radio','Spare key'];
 
+/*
+   The plate step does the heavy lifting: it identifies the car and fills in
+   make, year, fuel, engine and colour, so none of those are asked as questions.
+   What follows is only what a registration lookup cannot tell you.
+*/
 const QUESTIONS = [
   { id: 'plate', type: 'plate', title: "What's the number plate?",
-    help: 'I read the registration period straight off the plate and prefill the year. No plate? Skip it.' },
-  { id: 'vin', type: 'vin', title: 'Got the VIN?',
-    help: 'Optional. A 17-character VIN lets me look up the full factory spec for free.' },
-  { id: 'make', type: 'text', title: 'Make and model', fields: [
-      { key: 'make', label: 'Make', placeholder: 'Ford' },
-      { key: 'model', label: 'Model', placeholder: 'Focus' },
-      { key: 'variant', label: 'Trim / variant', placeholder: 'ST-Line 1.0 EcoBoost' },
-    ] },
-  { id: 'year', type: 'text', title: 'Year and mileage', fields: [
-      { key: 'year', label: 'Year', type: 'number', placeholder: '2019' },
-      { key: 'mileage', label: 'Mileage', type: 'number', placeholder: '42000' },
-    ] },
-  { id: 'fuel', type: 'choice', key: 'fuel', title: 'What does it run on?', options: FUELS },
-  { id: 'engine', type: 'text', title: 'Engine size', help: 'In cc — 1600 for a 1.6.',
-    when: (d) => d.fuel !== 'Electric',
-    fields: [{ key: 'engine', label: 'Engine (cc)', type: 'number', placeholder: '1600' }] },
-  { id: 'range', type: 'text', title: 'Battery and range',
-    when: (d) => d.fuel === 'Electric' || d.fuel === 'Plug-in hybrid',
-    fields: [
-      { key: 'batteryKwh', label: 'Battery (kWh)', type: 'number', placeholder: '64' },
-      { key: 'rangeMiles', label: 'Real-world range (miles)', type: 'number', placeholder: '210' },
-    ] },
-  { id: 'transmission', type: 'choice', key: 'transmission', title: 'Gearbox',
-    options: ['Manual', 'Automatic', 'Semi-automatic'] },
-  { id: 'body', type: 'choice', key: 'body', title: 'Body style', options: BODIES },
+    help: 'Type the registration and I will identify the car.' },
   { id: 'colour', type: 'text', title: 'Colour and doors', fields: [
       { key: 'colour', label: 'Colour', placeholder: 'Metallic grey' },
       { key: 'doors', label: 'Doors', type: 'number', placeholder: '5' },
@@ -1305,38 +1368,54 @@ function paintWizard(root) {
 
   if (q.type === 'plate') {
     body.innerHTML = `
-      <input type="text" id="f-plate" placeholder="AB12 CDE" value="${esc(d.plate || '')}"
-        style="text-transform:uppercase;font-weight:700;letter-spacing:.08em;font-size:1.3rem;text-align:center">
-      <div id="plate-out" class="small muted" style="margin-top:.6rem;text-align:center"></div>`;
-    const out = $('#plate-out');
-    const check = () => {
-      const info = decodePlate($('#f-plate').value);
-      out.textContent = info.note || '';
-      if (info.year) d.year = d.year || info.year;
-    };
-    $('#f-plate').oninput = check;
-    check();
-    $('#f-plate').focus();
-
-  } else if (q.type === 'vin') {
-    body.innerHTML = `
-      <div class="row">
-        <input type="text" id="f-vin" placeholder="17-character VIN" value="${esc(d.vin || '')}" style="text-transform:uppercase">
-        <button class="btn" id="vin-go">Look up</button>
+      <div class="plate-entry">
+        <input type="text" id="f-plate" placeholder="AB12 CDE" maxlength="9" value="${esc(fmtPlate(d.plate || ''))}"
+          style="text-transform:uppercase;font-weight:700;letter-spacing:.12em;font-size:1.6rem;text-align:center">
+        <button class="btn btn-primary" id="plate-go">Identify</button>
       </div>
-      <div id="vin-out" class="small muted" style="margin-top:.6rem"></div>`;
-    $('#vin-go').onclick = async () => {
-      const out = $('#vin-out');
-      out.textContent = 'Looking up…';
-      try {
-        const info = await decodeVin($('#f-vin').value);
-        Object.entries(info).forEach(([k, val]) => { if (val) d[k] = val; });
-        out.textContent = 'Found: ' + [info.year, info.make, info.model, info.variant].filter(Boolean).join(' ') +
-          '. I have prefilled the next few questions.';
-      } catch (err) {
-        out.textContent = 'No luck — ' + err.message + ' Carry on and fill it in by hand.';
+      <div id="plate-out" class="small" style="margin-top:.8rem"></div>
+      <div id="plate-confirm"></div>`;
+
+    const input = $('#f-plate');
+    const out = $('#plate-out');
+
+    const runLookup = async () => {
+      const raw = input.value;
+      if (!raw.trim()) { out.textContent = ''; $('#plate-confirm').innerHTML = ''; return; }
+      out.innerHTML = '<span class="muted">Identifying…</span>';
+      const found = await lookupPlate(raw);
+      d.plate = found.plate;
+      Object.entries(found.data).forEach(([k, val]) => { if (val) d[k] = val; });
+      out.innerHTML = `<div class="assist" style="margin:0"><b>${esc(found.sourceLabel)}</b>${esc(found.note)}</div>`;
+      paintConfirm();
+    };
+
+    /* Whatever the lookup could not tell us is asked for right here, once. */
+    function paintConfirm() {
+      $('#plate-confirm').innerHTML = `
+        <div class="grid cols-2" style="margin-top:1rem">
+          ${[['make', 'Make', 'text', 'Ford'], ['model', 'Model', 'text', 'Focus'],
+             ['variant', 'Trim / variant', 'text', 'ST-Line'], ['year', 'Year', 'number', '2019'],
+             ['mileage', 'Mileage', 'number', '42000'], ['fuel', 'Fuel', 'text', 'Petrol'],
+             ['transmission', 'Gearbox', 'text', 'Manual'], ['engine', 'Engine (cc)', 'number', '1600']]
+            .map(([k, label, type, ph]) => `
+              <div class="field" style="margin:0">
+                <label for="f-${k}">${label}</label>
+                <input id="f-${k}" type="${type}" placeholder="${ph}" value="${esc(d[k] ?? '')}">
+              </div>`).join('')}
+        </div>
+        <p class="small muted" style="margin-top:.7rem">Correct anything that looks wrong — this is the only time you will be asked.</p>`;
+    }
+
+    $('#plate-go').onclick = runLookup;
+    input.oninput = () => {
+      const info = decodePlate(input.value);
+      if (!$('#plate-confirm').innerHTML) {
+        out.innerHTML = info.note ? `<span class="muted">${esc(info.note)}</span>` : '';
       }
     };
+    if (d.plate) paintConfirm();
+    input.focus();
 
   } else if (q.type === 'text') {
     body.innerHTML = q.fields.map(f => `
@@ -1442,9 +1521,13 @@ function paintWizard(root) {
   }
 }
 
+const PLATE_CONFIRM_KEYS = ['make', 'model', 'variant', 'year', 'mileage', 'fuel', 'transmission', 'engine'];
+
 function collect(q, d) {
-  if (q.type === 'plate') d.plate = ($('#f-plate')?.value || '').toUpperCase().trim();
-  else if (q.type === 'vin') d.vin = ($('#f-vin')?.value || '').toUpperCase().trim();
+  if (q.type === 'plate') {
+    d.plate = ($('#f-plate')?.value || '').toUpperCase().trim();
+    PLATE_CONFIRM_KEYS.forEach(k => { const el = $('#f-' + k); if (el) d[k] = el.value.trim(); });
+  }
   else if (q.type === 'text') q.fields.forEach(f => {
     const el = $('#f-' + f.key); if (el) d[f.key] = el.value.trim();
   });
@@ -1453,10 +1536,10 @@ function collect(q, d) {
 
 /** Instant, rule-based coaching shown inside the wizard. */
 function wizardAssist(q, d) {
-  if (q.id === 'year' && d.mileage && d.year) {
+  if (q.id === 'colour' && d.mileage && d.year) {
     const age = Math.max(1, new Date().getFullYear() - Number(d.year));
     const perYear = Math.round(Number(d.mileage) / age);
-    if (perYear > 15000) return `That works out at about ${num(perYear)} miles a year — high. Lead on the service history in the advert.`;
+    if (perYear > 15000) return `That mileage works out at about ${num(perYear)} miles a year — high. Lead on the service history in the advert.`;
     if (perYear < 6000) return `About ${num(perYear)} miles a year — genuinely low. Say so in the headline; it is worth real money.`;
   }
   if (q.id === 'money' && d.purchasePrice) {
@@ -1466,7 +1549,6 @@ function wizardAssist(q, d) {
   }
   if (q.id === 'condition') return 'Buyers forgive a fault they were told about. They walk away from one they discover.';
   if (q.id === 'features') return 'Sat nav, camera and heated seats are the three that get clicked most — tick them if they are there.';
-  if (q.id === 'vin' && !d.vin) return 'No VIN to hand? Skip it. Nothing later depends on it.';
   return null;
 }
 
