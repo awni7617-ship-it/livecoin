@@ -48,6 +48,11 @@ is the hardest shot in the game. Hold boost into a wall to drive up it.
 
 ## What's in it
 
+- **Renderer** — a WebGL engine written from scratch: real-time shadow maps (depth packed
+  into RGBA8, PCF-filtered, so no extensions are required), bloom, ACES tonemapping, FXAA,
+  vignette, chromatic aberration and radial speed streaks, plus glossy car materials with a
+  cheap environment reflection and Fresnel rim. Quality adapts to your frame rate with
+  hysteresis so nothing flickers on and off.
 - **Match play** — 1v1 / 2v2 / 3v3, 3/5/8 minute clocks, kickoff countdowns, goal replays,
   overtime golden goal, end-of-match scoreboard, saved career stats.
 - **Physics** — Rocket League units and constants (2300 uu/s top speed, 650 gravity, 991 boost
@@ -58,8 +63,19 @@ is the hardest shot in the game. Hold boost into a wall to drive up it.
   goal tunnels and netting, crowd, floodlights.
 - **Bots** — three skill levels with intercept prediction, role rotation (first man / second
   striker / keeper), saves, clears, boost management and aerials.
-- **Presentation** — WebGL renderer written from scratch, procedural textures, particles,
-  synthesised audio (engine, boost, impacts, crowd, goal horn), haptics, minimap, replays.
+- **Cars** — six chassis built from lofted superellipse cross-sections with smooth normals:
+  sculpted shells, canopies, splitters, skirts, spoilers, rocket nozzles, emissive head and
+  tail lights, spoked rims, team stripes. Ten paints, five wheel finishes, six boost trails.
+- **Arena** — hanging four-sided jumbotron that mirrors the live score and clock, animated
+  LED ribbon boards in team colours, brushed-metal trim, floodlight rigs, crowd tiers.
+- **Feel** — hit-stop on your heavy strikes, screen flash on goals, FOV that widens under
+  boost, camera bank into corners, impact shockwave rings, tyre smoke while powersliding,
+  a comet trail on a fast ball, landing dust, sparks, and haptics.
+- **Audio** — layered synthesised engine (sub, saw, square, turbine whine) that tracks speed
+  and load, boost hiss plus rumble, multi-layer ball strikes, crowd ambience and reactions,
+  a stadium goal horn, and save cues. No audio files — it is all generated at runtime.
+- **Presentation** — procedural textures, batched textured particles, minimap, goal replays
+  with a cinematic orbit camera.
 - **Options** — camera (FOV, distance, height, stiffness, ball cam), controls (left/right hand
   layout, button size, sensitivity, auto throttle, invert air pitch, vibration), audio, and
   quality with adaptive resolution.
