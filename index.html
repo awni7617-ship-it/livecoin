@@ -1737,7 +1737,11 @@ SMALL_HALF.forEach(p => {
 const GRAV = 650, CAR_M = 180, BALL_M = 30;
 const MAXSPD = 2300, SUPER = 2200, THROT_MAX = 1410, BOOST_A = 991.666, BOOST_USE = 33.3;
 const BRAKE_A = 3500, COAST_A = 525, MAXW = 5.5;
-const JUMP_V = 292, JUMP_HOLD_A = 1400, JUMP_HOLD_T = .2;
+const JUMP_V = 292, JUMP_HOLD_A = 1550, JUMP_HOLD_T = .2;
+const COYOTE_T = .12;      /* grace period after the wheels leave a surface */
+const JUMP_BUFFER = .2;    /* a press this long before landing still counts */
+const TAP_ASSIST = .11;    /* a tap gets this much hold force for free */
+const DODGE_DEAD = .32;    /* stick inside this is a double jump, outside is a flip */
 const DODGE_V = 500, FLIP_T = .68, FLIP_W = 9.4, FLIP_WINDOW = 1.25, STICK_A = 760;
 const BALL_MAXSPD = 6000, BALL_MAXW = 6, BALL_DRAG = .0305, BALL_E = .6;
 
@@ -1853,6 +1857,8 @@ class Car {
     this.ctrl = { th: 0, st: 0, boost: false, jump: false, slide: false, airRoll: false, py: 0, px: 0 };
     this.prevJump = false;
     this.bodyTouch = false; this.stuckT = 0;
+    this.coyoteT = 0; this.jumpBuf = 0; this.squash = 0; this.squashV = 0; this.lastGn = [0, 0, 1];
+    this.airLock = 0;
     this.aiT = 0; this.aiState = 'idle'; this.aiCommit = false; this.aiTarget = v3(); this.aiFlipT = 0; this.aiJitter = 0; this.aiAerial = 0;
     this.hitTimer = 0;
   }
@@ -1865,6 +1871,7 @@ class Car {
     this.boost = boost === undefined ? 33 : boost;
     this.onGround = true; vset(this.gn, 0, 0, 1);
     this.jumpT = 99; this.hasFlip = false; this.flipT = 0; this.dead = 0; this.airT = 0;
+    this.coyoteT = 0; this.jumpBuf = 0; this.squash = 0; this.squashV = 0; this.airLock = 0;
   }
   step(dt, c) {
     if (this.dead > 0) { this.dead -= dt; return; }
@@ -1881,14 +1888,24 @@ class Car {
       if (cl < rad + 26) { cnt++; dSum += cl; vadd(gn, gn, _n); }
     }
     const wasAir = !this.onGround;
-    this.onGround = cnt > 0 && vlen2(gn) > .05;
+    /* After a jump the wheels are still inside probe range for ~0.1s. Without
+       this lockout the car re-registers as grounded mid-launch, which cancels
+       the hold force, applies surface stick downward and eats the double jump. */
+    this.airLock = max(0, this.airLock - dt);
+    this.onGround = cnt > 0 && vlen2(gn) > .05 && this.airLock <= 0;
     if (this.onGround) {
       vnorm(this.gn, gn);
+      vcopy(this.lastGn, this.gn);
       const avg = dSum / cnt;
       if (wasAir && this.airT > .25) {
         const vi = abs(vdot(v, this.gn));
         if (vi > 250) { Audio_.wallHit(clamp(vi / 1800, 0, .8)); if (this === player) buzz(clamp(vi / 60, 8, 30)); }
         spawnDust(p, this.gn, clamp(vi / 900, 0, 1));
+        this.squashV = clamp(vi / 90, 1.5, 13);            /* squat on touchdown */
+        if (vi > 700) spawnJumpRing(p, clamp(vi / 1600, .3, 1));
+        /* absorb the impact instead of trampolining off it */
+        const vn0 = vdot(v, this.gn);
+        if (vn0 < -250) vmadd(v, v, this.gn, -vn0 * .6);
         if (this.flipT > 0) { /* wave dash: convert the flip into forward speed */
           const f = this.fwd, fl = vmadd(v3(), f, this.gn, -vdot(f, this.gn));
           vnorm(fl, fl); vmadd(v, v, fl, 260 * clamp(vi / 900, .2, 1));
@@ -1908,23 +1925,40 @@ class Car {
     /* ---- gravity ---- */
     v[2] -= GRAV * dt;
 
-    /* ---- jump / dodge ---- */
+    /* ---- jump / dodge ----
+       Three assists make this feel right on a touchscreen without changing the
+       Rocket League jump model: coyote time (a jump still fires just after the
+       wheels leave a surface), input buffering (a press just before landing
+       fires on touchdown), and tap assist (a short tap still gets a decent
+       chunk of the hold force instead of a feeble hop). */
     const jumpPress = c.jump && !this.prevJump;
     this.prevJump = c.jump;
     this.jumpT += dt;
+    this.coyoteT = this.onGround ? COYOTE_T : max(0, this.coyoteT - dt);
+    this.jumpBuf = max(0, this.jumpBuf - dt);
+    const groundJump = () => {
+      const n = this.onGround ? this.gn : (this.lastGn || UPW);
+      vmadd(v, v, this.up, JUMP_V);
+      if (vdot(v, n) < JUMP_V * .55) vmadd(v, v, n, JUMP_V * .55 - vdot(v, n));
+      this.jumpT = 0; this.holdT = 0; this.hasFlip = true;
+      this.onGround = false; this.airT = .001; this.coyoteT = 0; this.jumpBuf = 0;
+      this.airLock = .16;
+      this.squashV = -9;
+      Audio_.jump(); if (this === player) buzz(12);
+      spawnDust(p, n, .35);
+      spawnJumpRing(p, .55);
+    };
     if (jumpPress) {
-      if (this.onGround) {
-        vmadd(v, v, this.up, JUMP_V);
-        this.jumpT = 0; this.holdT = 0; this.hasFlip = true; this.onGround = false; this.airT = .001;
-        Audio_.jump(); if (this === player) buzz(12);
-        spawnDust(p, this.gn, .35);
-        spawnPickup(p, false);
+      if (this.onGround || (this.coyoteT > 0 && this.hasFlip === false && this.jumpT > .25)) {
+        groundJump();
       } else if (this.hasFlip && this.jumpT < FLIP_WINDOW && this.flipT <= 0) {
         const sx = clamp(c.py, -1, 1), sy = clamp(-c.px, -1, 1);
         const mag = Math.hypot(sx, sy);
-        if (mag < .18) {                              /* straight double jump */
-          vmadd(v, v, this.up, JUMP_V);
-          this.hasFlip = false; Audio_.jump();
+        if (mag < DODGE_DEAD) {                       /* straight double jump */
+          vmadd(v, v, this.up, JUMP_V * 1.05);
+          this.hasFlip = false; this.squashV = -7;
+          Audio_.jump(); if (this === player) buzz(10);
+          spawnJumpRing(p, .4);
         } else {                                      /* directional dodge */
           const dx = sx / mag, dy = sy / mag;
           const f = this.fwd, l = this.left;
@@ -1943,9 +1977,15 @@ class Car {
           this.flipT = FLIP_T; this.flipDir = [dx, dy]; this.hasFlip = false; this.dodged = true;
           Audio_.flip(); if (this === player) buzz(18);
         }
+      } else {
+        this.jumpBuf = JUMP_BUFFER;      /* nothing left to use — save it for the landing */
       }
     }
-    if (!this.onGround && c.jump && this.jumpT < JUMP_HOLD_T && this.holdT < JUMP_HOLD_T && this.flipT <= 0) {
+    /* a buffered press fires the instant the wheels touch down */
+    if (this.onGround && this.jumpBuf > 0 && this.jumpT > .2) groundJump();
+    /* hold for height; a tap still gets TAP_ASSIST worth of it */
+    if (!this.onGround && (c.jump || this.jumpT < TAP_ASSIST) &&
+        this.jumpT < JUMP_HOLD_T && this.holdT < JUMP_HOLD_T && this.flipT <= 0) {
       this.holdT += dt;
       vmadd(v, v, this.up, JUMP_HOLD_A * dt);
     }
@@ -2075,6 +2115,9 @@ class Car {
       v[2] += 420 * dt;
       if (up[2] > .9) this.stuckT = 0;
     }
+    /* squash & stretch spring: negative = stretched by a launch, positive = squatting */
+    this.squashV += (-this.squash * 300 - this.squashV * 19) * dt;
+    this.squash = clamp(this.squash + this.squashV * dt, -.34, .46);
     this.wasBoosting = this.boosting;
     this.supersonic = vlen2(v) > SUPER * SUPER;
     this.wheelSpin += vdot(v, this.fwd) / max(20, this.mesh.rad) * dt;
@@ -2330,6 +2373,20 @@ function spawnBallTrail(spd) {
   q.life = q.max = .3 + spd / 14000; q.sz = 90 + spd * .02; q.dr = 2; q.grow = 1;
   const heat = clamp((spd - 2600) / 2200, 0, 1);
   q.c[0] = 1; q.c[1] = .78 - heat * .3; q.c[2] = .4 - heat * .35; q.c[3] = .18 + heat * .5;
+}
+/* clean white shock ring for launches and hard landings */
+function spawnJumpRing(p, strength) {
+  const r = emit(1); if (!r) return;
+  vcopy(r.p, p); r.p[2] = max(8, p[2] - 14);
+  r.life = r.max = .26 + strength * .16; r.sz = 110 + strength * 210; r.grow = 1;
+  r.c[0] = .86; r.c[1] = .93; r.c[2] = 1; r.c[3] = .3 + strength * .45;
+  for (let i = 0; i < 3 + strength * 6 | 0; i++) {
+    const q = emit(); if (!q) return;
+    vcopy(q.p, p); q.p[2] += 4;
+    vset(q.v, rnd(-1, 1) * 200, rnd(-1, 1) * 200, rnd(30, 180));
+    q.life = q.max = rnd(.2, .42); q.sz = rnd(20, 46); q.g = 300; q.dr = 2.2; q.grow = 1;
+    q.c[0] = .8; q.c[1] = .87; q.c[2] = .95; q.c[3] = .22 + strength * .2;
+  }
 }
 function spawnPickup(p, big) {
   const r = emit(1); if (!r) return;
@@ -3113,7 +3170,9 @@ function carMatrix(c, out) {
   const lean = [0, 0, 0, 1];
   qmul(lean, qAxis([0, 0, 0, 1], [0, 1, 0], c.leanP * .05), qAxis(_qa, [1, 0, 0], -c.leanR * .045));
   const qq = qmul([0, 0, 0, 1], c.q, lean);
-  m4rt(out, qq, c.p);
+  const s = c.squash || 0;
+  if (abs(s) > .002) m4trs(out, c.p, qq, 1 + s * .16, 1 + s * .22, 1 - s * .40);
+  else m4rt(out, qq, c.p);
   return qq;
 }
 function drawCar(c, shadowPass) {

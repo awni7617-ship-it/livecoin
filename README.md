@@ -44,7 +44,13 @@ preset, no build command, no environment variables.
 | Reset ball (free play) | **RESET BALL** | `R` | — |
 
 Tap jump a second time while airborne with the stick pushed to **flip** — a flip into the ball
-is the hardest shot in the game. Hold boost into a wall to drive up it.
+is the hardest shot in the game. Hold jump for a higher launch; tap it for a quick hop. Hold
+boost into a wall to drive up it.
+
+Jumping has three assists so it behaves on a touchscreen: **coyote time** (a jump still fires
+for a moment after the wheels leave a surface), **input buffering** (a press just before you
+land fires on touchdown, so you can chain hops), and **tap assist** (a short tap still gets a
+useful launch instead of a feeble hop).
 
 ## What's in it
 
