@@ -128,13 +128,21 @@ async function fetchMot(env, reg) {
 }
 
 export async function onRequestGet({ request, env }) {
-  const reg = (new URL(request.url).searchParams.get('reg') || '')
+  const url = new URL(request.url);
+  const hasDvla = Boolean(env.DVLA_API_KEY);
+  const hasMot = Boolean(env.MOT_CLIENT_ID && env.MOT_CLIENT_SECRET && env.MOT_API_KEY);
+
+  /* ?status=1 answers "is lookup working?" without spending a lookup. A 404
+     here means this function was never deployed at all, which is a different
+     problem from a missing key and needs different advice. */
+  if (url.searchParams.get('status')) {
+    return json({ ok: true, dvla: hasDvla, mot: hasMot });
+  }
+
+  const reg = (url.searchParams.get('reg') || '')
     .toUpperCase().replace(/[^A-Z0-9]/g, '');
 
   if (!/^[A-Z0-9]{2,8}$/.test(reg)) return json({ error: 'bad_registration' }, 400);
-
-  const hasDvla = Boolean(env.DVLA_API_KEY);
-  const hasMot = Boolean(env.MOT_CLIENT_ID && env.MOT_CLIENT_SECRET && env.MOT_API_KEY);
   if (!hasDvla && !hasMot) return json({ error: 'not_configured' }, 501);
 
   // One slow service should not hold up the other.

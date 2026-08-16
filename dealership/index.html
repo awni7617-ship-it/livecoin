@@ -301,6 +301,11 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
   font-variant-numeric: tabular-nums;
 }
 .plate-entry input::placeholder { color: rgba(0,0,0,.35); }
+.found-tag {
+  display: inline-block; margin-left: .3rem; padding: 0 .35rem; border-radius: 3px;
+  background: var(--brand-soft); color: var(--brand);
+  font-size: .68rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em;
+}
 
 /* ============================================================
    Vehicle detail
@@ -621,6 +626,44 @@ const PLATE_REGIONS = {
    3. Failing both, the plate itself: the registration period and issuing
       office are readable straight off it, offline, with no service at all.
 */
+/*
+   Lookup can be unavailable for two very different reasons, and the fix is
+   different for each, so the app finds out which and says so plainly rather
+   than quietly falling back and looking broken.
+*/
+let plateService = { state: 'unknown', dvla: false, mot: false };
+
+async function probePlateService() {
+  try {
+    const res = await fetch('/api/plate?status=1');
+    if (res.status === 404) { plateService = { state: 'no_function' }; return plateService; }
+    if (!res.ok) { plateService = { state: 'error' }; return plateService; }
+    const j = await res.json();
+    plateService = {
+      state: j.dvla || j.mot ? 'ready' : 'no_keys',
+      dvla: Boolean(j.dvla), mot: Boolean(j.mot),
+    };
+  } catch {
+    plateService = { state: 'no_function' };
+  }
+  return plateService;
+}
+
+const PLATE_SERVICE_HELP = {
+  no_function: {
+    title: 'Lookup is not deployed',
+    body: 'Only index.html was uploaded, so there is no server to make the lookup. Upload the whole folder — the functions/api/plate.js file is what does it — then set the keys in Settings.',
+  },
+  no_keys: {
+    title: 'Lookup is deployed but has no keys',
+    body: 'The lookup function is live, but no DVLA or MOT credentials are set. Add them in your Cloudflare Pages project under Settings → Variables and secrets, then redeploy.',
+  },
+  error: {
+    title: 'Lookup is not responding',
+    body: 'The lookup function is deployed but returned an error. Check the keys are correct and the function log in Cloudflare.',
+  },
+};
+
 let plateServiceOffline = false;
 
 async function lookupPlate(raw) {
@@ -678,10 +721,12 @@ async function lookupPlate(raw) {
     }
   } catch { /* nothing configured, or offline — fall through */ }
 
+  const help = PLATE_SERVICE_HELP[plateService.state];
   return {
-    plate, source: 'offline', sourceLabel: 'Read from the plate',
+    plate, source: 'offline',
+    sourceLabel: help ? help.title : 'Read from the plate',
     note: [offline.note, region ? `Issued in ${region.replace(/&amp;/g, '&')}.` : '',
-           'DVLA lookup is not switched on, so fill in the rest below.'].filter(Boolean).join(' '),
+           help ? help.body : ''].filter(Boolean).join(' '),
     data: { year: offline.year },
   };
 }
@@ -1400,20 +1445,31 @@ function paintWizard(root) {
 
     const input = $('#f-plate');
     const out = $('#plate-out');
+    let lastLookedUp = null;
+    let debounce = null;
 
     const runLookup = async () => {
       const raw = input.value;
-      if (!raw.trim()) { out.textContent = ''; $('#plate-confirm').innerHTML = ''; return; }
+      const clean = raw.toUpperCase().replace(/[^A-Z0-9]/g, '');
+      if (!clean) { out.textContent = ''; $('#plate-confirm').innerHTML = ''; return; }
+      lastLookedUp = clean;
       out.innerHTML = '<span class="muted">Identifying…</span>';
+
+      if (plateService.state === 'unknown') await probePlateService();
+
       const found = await lookupPlate(raw);
       d.plate = found.plate;
+      d.foundKeys = Object.keys(found.data).filter(k => found.data[k]);
       Object.entries(found.data).forEach(([k, val]) => { if (val) d[k] = val; });
       out.innerHTML = `<div class="assist" style="margin:0"><b>${esc(found.sourceLabel)}</b>${esc(found.note)}</div>`;
       paintConfirm();
     };
 
-    /* Whatever the lookup could not tell us is asked for right here, once. */
+    /* Whatever the lookup could not tell us is asked for right here, once.
+       Anything it did tell us is labelled, so it is obvious what was known
+       and what still needs typing. */
     function paintConfirm() {
+      const foundKeys = d.foundKeys || [];
       $('#plate-confirm').innerHTML = `
         <div class="grid cols-2" style="margin-top:1rem">
           ${[['make', 'Make', 'text', 'Ford'], ['model', 'Model', 'text', 'Focus'],
@@ -1422,7 +1478,8 @@ function paintWizard(root) {
              ['transmission', 'Gearbox', 'text', 'Manual'], ['engine', 'Engine (cc)', 'number', '1600']]
             .map(([k, label, type, ph]) => `
               <div class="field" style="margin:0">
-                <label for="f-${k}">${label}</label>
+                <label for="f-${k}">${label}${foundKeys.includes(k)
+                  ? ' <span class="found-tag">found</span>' : ''}</label>
                 <input id="f-${k}" type="${type}" placeholder="${ph}" value="${esc(d[k] ?? '')}">
               </div>`).join('')}
         </div>
@@ -1430,12 +1487,21 @@ function paintWizard(root) {
     }
 
     $('#plate-go').onclick = runLookup;
+
     input.oninput = () => {
-      const info = decodePlate(input.value);
+      const clean = input.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
       if (!$('#plate-confirm').innerHTML) {
+        const info = decodePlate(input.value);
         out.innerHTML = info.note ? `<span class="muted">${esc(info.note)}</span>` : '';
       }
+      // Identify as soon as the plate looks complete — nobody should have to
+      // find a button for the thing the screen exists to do.
+      clearTimeout(debounce);
+      if (clean.length >= 5 && clean !== lastLookedUp) {
+        debounce = setTimeout(runLookup, 600);
+      }
     };
+
     if (d.plate) paintConfirm();
     input.focus();
 
@@ -2160,6 +2226,14 @@ function viewSettings(root) {
       </section>
 
       <section class="card pad">
+        <div class="row-between" style="margin-bottom:.4rem">
+          <h3>Number plate lookup</h3>
+          <button class="btn btn-sm" id="pl-check">Check now</button>
+        </div>
+        <div id="pl-status" class="small muted">Checking…</div>
+      </section>
+
+      <section class="card pad">
         <h3 style="margin-bottom:.4rem">AI engine</h3>
         <p class="small muted" style="margin-bottom:.9rem">
           The built-in engine is free, instant, works offline and needs no account — it handles pricing,
@@ -2211,6 +2285,33 @@ function viewSettings(root) {
     s.targetMargin = Number($('#st-margin').value) || 12;
     save(); toast('Saved.'); render();
   };
+
+  const paintPlateStatus = async () => {
+    const el = $('#pl-status');
+    if (!el) return;
+    el.innerHTML = '<span class="muted">Checking…</span>';
+    plateServiceOffline = false;
+    const st = await probePlateService();
+
+    if (st.state === 'ready') {
+      el.innerHTML = `
+        <p style="color:var(--good-text);font-weight:600">✅ Lookup is working.</p>
+        <ul style="margin:.5rem 0 0;padding-left:1.1rem;line-height:1.6">
+          <li>DVLA — ${st.dvla ? 'connected' : '<b>not set up</b>: add DVLA_API_KEY for tax status and colour'}</li>
+          <li>MOT history — ${st.mot ? 'connected' : '<b>not set up</b>: add MOT_CLIENT_ID, MOT_CLIENT_SECRET and MOT_API_KEY for the model and mileage'}</li>
+        </ul>`;
+      return;
+    }
+
+    const help = PLATE_SERVICE_HELP[st.state] || PLATE_SERVICE_HELP.error;
+    el.innerHTML = `
+      <p style="color:var(--critical);font-weight:600">❌ ${esc(help.title)}</p>
+      <p style="margin-top:.4rem">${esc(help.body)}</p>
+      <p style="margin-top:.6rem">Until it is set up the app reads what it can off the plate itself —
+      the year and the issuing office — and you fill in the rest. Full instructions are in the README.</p>`;
+  };
+  paintPlateStatus();
+  $('#pl-check').onclick = paintPlateStatus;
 
   $('#st-prov').onchange = (e) => {
     $('#ai-extra').hidden = e.target.value === 'builtin';
