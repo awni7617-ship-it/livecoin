@@ -59,15 +59,14 @@ is the hardest shot in the game. Hold boost into a wall to drive up it.
   acceleration, the real throttle and steering curves). Wall and ceiling driving, jumps,
   directional flips, flip cancels, wave dashes, aerials, supersonic demolitions, boost pads
   (6 big / 28 small) with respawn timers, ball spin and post/crossbar collisions.
-- **Arena** — the octagonal 8192 × 10240 × 2044 pitch with rounded floor-to-wall transitions,
-  goal tunnels and netting, crowd, floodlights.
 - **Bots** — three skill levels with intercept prediction, role rotation (first man / second
   striker / keeper), saves, clears, boost management and aerials.
 - **Cars** — six chassis built from lofted superellipse cross-sections with smooth normals:
   sculpted shells, canopies, splitters, skirts, spoilers, rocket nozzles, emissive head and
   tail lights, spoked rims, team stripes. Ten paints, five wheel finishes, six boost trails.
-- **Arena** — hanging four-sided jumbotron that mirrors the live score and clock, animated
-  LED ribbon boards in team colours, brushed-metal trim, floodlight rigs, crowd tiers.
+- **Arena** — the octagonal 8192 × 10240 × 2044 pitch with rounded floor-to-wall transitions,
+  goal tunnels and netting, a hanging four-sided jumbotron mirroring the live score and clock,
+  animated LED ribbon boards in team colours, brushed-metal trim, floodlights and crowd tiers.
 - **Feel** — hit-stop on your heavy strikes, screen flash on goals, FOV that widens under
   boost, camera bank into corners, impact shockwave rings, tyre smoke while powersliding,
   a comet trail on a fast ball, landing dust, sparks, and haptics.
