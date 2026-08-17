@@ -1,0 +1,8 @@
+# Forecourt — Netlify configuration.
+#
+# There is no build step. index.html is the whole app, and the function in
+# netlify/functions answers /api/plate for the number plate lookup.
+
+[build]
+  publish = "."
+  functions = "netlify/functions"

@@ -1,0 +1,80 @@
+FORECOURT — putting it live on Netlify
+======================================
+
+Everything happens in your browser. No installing, no command line, no GitHub.
+
+
+STEP 1 — UNZIP
+--------------
+Right-click this zip in your Downloads, choose "Extract All", then "Extract".
+A folder appears. It should contain:
+
+    index.html
+    netlify.toml
+    netlify\functions\plate.mjs
+
+If you only see the zip, the extract did not happen. Try again.
+
+
+STEP 2 — DROP IT ON NETLIFY
+---------------------------
+Go to:   https://app.netlify.com/drop
+
+Drag the FOLDER onto the page. Not the zip, not index.html on its own —
+the whole folder, so the netlify folder inside it comes too.
+
+Wait a few seconds. Netlify gives you a live address straight away, something
+like  https://sparkly-otter-123456.netlify.app
+
+That is your site. It is live and it works.
+
+You will be asked to make a free account to keep the site permanently. Do it —
+otherwise the site disappears after a while.
+
+
+STEP 3 — CHECK WHAT YOU GOT
+---------------------------
+Open the site, create your dealership account, then go to:
+
+    Settings  ->  Number plate lookup
+
+  "Lookup is deployed but has no keys"
+        Perfect. The function went up. Carry on to step 4 whenever you like.
+
+  "Running as a single file"
+        The netlify folder did not make it. You probably dragged index.html
+        by itself. Go back and drag the whole folder.
+
+
+STEP 4 — SWITCH THE PLATE LOOKUP ON (optional, do it later)
+-----------------------------------------------------------
+Both services are free, and both email you the values after you register.
+
+    DVLA           https://developer-portal.driver-vehicle-licensing.api.gov.uk
+    MOT history    https://documentation.history.mot.api.gov.uk
+
+In Netlify:  your site  ->  Site configuration  ->  Environment variables
+Add whichever you have:
+
+    DVLA_API_KEY
+    MOT_CLIENT_ID
+    MOT_CLIENT_SECRET
+    MOT_API_KEY
+
+Then Deploys -> Trigger deploy -> Deploy site.
+
+DVLA approval can take a day or two. Everything else in the app works while
+you wait.
+
+
+UPDATING LATER
+--------------
+Drag the folder onto the same site again (Deploys -> drag the folder there).
+It replaces what is there.
+
+
+YOUR DATA
+---------
+Stock is stored in the browser you enter it on. It does not sync between
+devices yet, and clearing browsing data wipes it. Use Settings -> Export
+backup regularly.
