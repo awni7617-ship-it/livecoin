@@ -659,7 +659,7 @@ const PLATE_SERVICE_HELP = {
   },
   no_keys: {
     title: 'Lookup is deployed but has no keys',
-    body: 'The lookup function is live, but no DVLA or MOT credentials are set. Add them in your Cloudflare Pages project under Settings → Variables and secrets, then redeploy.',
+    body: 'The lookup is live but no DVLA or MOT credentials are set. On a Worker, run "npx wrangler secret put DVLA_API_KEY" and the same for MOT_CLIENT_ID, MOT_CLIENT_SECRET and MOT_API_KEY. On Pages, add them under Settings → Variables and secrets. Then redeploy.',
   },
   error: {
     title: 'Lookup is not responding',

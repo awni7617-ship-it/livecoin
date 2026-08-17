@@ -1,0 +1,16 @@
+# Forecourt — Cloudflare Worker configuration.
+#
+# Deploy with:   npx wrangler deploy
+#
+# "name" becomes the subdomain: forecourt.<your-account>.workers.dev
+# Change it if you want a different address.
+
+name = "forecourt"
+main = "src/worker.js"
+compatibility_date = "2025-01-01"
+
+# Serves everything in ./public as static files. Requests that do not match a
+# file fall through to the Worker, which is how /api/plate reaches the code.
+[assets]
+directory = "./public"
+binding = "ASSETS"
