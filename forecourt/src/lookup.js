@@ -1,0 +1,352 @@
+/**
+ * Registration-plate intelligence.
+ *
+ * Three layers, best first, merged into one result:
+ *   1. A live provider — DVLA's Vehicle Enquiry Service, or any provider wired
+ *      up through LOOKUP_URL — when a key is configured.
+ *   2. VIN decoding through the free NHTSA vPIC database (no key needed).
+ *   3. An offline decoder that reads the plate itself: format, age identifier,
+ *      first-registration window and the DVLA office that issued it.
+ *
+ * Every layer is optional and every failure is soft, so a lookup always returns
+ * something useful and the user can correct anything.
+ */
+
+export function plateKey(plate) {
+  return String(plate || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+}
+
+export function formatPlate(plate) {
+  const key = plateKey(plate);
+  // Current UK style AA00AAA -> "AA00 AAA"
+  if (/^[A-Z]{2}\d{2}[A-Z]{3}$/.test(key)) return `${key.slice(0, 4)} ${key.slice(4)}`;
+  // Prefix style A000AAA -> "A000 AAA"
+  if (/^[A-Z]\d{1,3}[A-Z]{3}$/.test(key)) return `${key.slice(0, -3)} ${key.slice(-3)}`;
+  // Suffix style AAA000A -> "AAA 000A"
+  if (/^[A-Z]{3}\d{1,3}[A-Z]$/.test(key)) return `${key.slice(0, 3)} ${key.slice(3)}`;
+  // Northern Ireland AAA0000 -> "AAA 0000"
+  if (/^[A-Z]{1,3}\d{1,4}$/.test(key)) return `${key.replace(/(\d)/, ' $1')}`;
+  return key;
+}
+
+/** DVLA memory tags: first letter = area, second letter = issuing office. */
+const AREAS = {
+  A: { area: 'Anglia', offices: [['AA', 'AN', 'Peterborough'], ['AO', 'AU', 'Norwich'], ['AV', 'AY', 'Ipswich']] },
+  B: { area: 'Birmingham', offices: [['BA', 'BY', 'Birmingham']] },
+  C: { area: 'Cymru', offices: [['CA', 'CO', 'Cardiff'], ['CP', 'CV', 'Swansea'], ['CW', 'CY', 'Bangor']] },
+  D: { area: 'Deeside', offices: [['DA', 'DK', 'Chester'], ['DL', 'DY', 'Shrewsbury']] },
+  E: { area: 'Essex', offices: [['EA', 'EY', 'Chelmsford']] },
+  F: { area: 'Forest & Fens', offices: [['FA', 'FP', 'Nottingham'], ['FR', 'FY', 'Lincoln']] },
+  G: { area: 'Garden of England', offices: [['GA', 'GO', 'Maidstone'], ['GP', 'GY', 'Brighton']] },
+  H: { area: 'Hampshire & Dorset', offices: [['HA', 'HJ', 'Bournemouth'], ['HK', 'HY', 'Portsmouth']] },
+  K: { area: 'Luton & Northampton', offices: [['KA', 'KL', 'Luton'], ['KM', 'KY', 'Northampton']] },
+  L: { area: 'London', offices: [['LA', 'LJ', 'Wimbledon'], ['LK', 'LT', 'Stanmore'], ['LU', 'LY', 'Sidcup']] },
+  M: { area: 'Manchester & Merseyside', offices: [['MA', 'MY', 'Manchester']] },
+  N: { area: 'North', offices: [['NA', 'NO', 'Newcastle'], ['NP', 'NY', 'Stockton']] },
+  O: { area: 'Oxford', offices: [['OA', 'OY', 'Oxford']] },
+  P: { area: 'Preston', offices: [['PA', 'PT', 'Preston'], ['PU', 'PY', 'Carlisle']] },
+  R: { area: 'Reading', offices: [['RA', 'RY', 'Reading']] },
+  S: { area: 'Scotland', offices: [['SA', 'SJ', 'Glasgow'], ['SK', 'SO', 'Edinburgh'], ['SP', 'ST', 'Dundee'], ['SU', 'SW', 'Aberdeen'], ['SX', 'SY', 'Inverness']] },
+  V: { area: 'Severn Valley', offices: [['VA', 'VY', 'Worcester']] },
+  W: { area: 'West of England', offices: [['WA', 'WJ', 'Exeter'], ['WK', 'WL', 'Truro'], ['WM', 'WY', 'Bristol']] },
+  Y: { area: 'Yorkshire', offices: [['YA', 'YK', 'Leeds'], ['YL', 'YU', 'Sheffield'], ['YV', 'YY', 'Beverley']] },
+};
+
+/** Year letters used by the pre-2001 prefix and suffix schemes. */
+const PREFIX_YEARS = {
+  A: '1983-84', B: '1984-85', C: '1985-86', D: '1986-87', E: '1987-88', F: '1988-89',
+  G: '1989-90', H: '1990-91', J: '1991-92', K: '1992-93', L: '1993-94', M: '1994-95',
+  N: '1995-96', P: '1996-97', R: '1997-98', S: '1998-99', T: '1999', V: '1999-2000',
+  W: '2000', X: '2000-01', Y: '2001',
+};
+const SUFFIX_YEARS = {
+  A: '1963-64', B: '1964-65', C: '1965-66', D: '1966-67', E: '1967', F: '1967-68',
+  G: '1968-69', H: '1969-70', J: '1970-71', K: '1971-72', L: '1972-73', M: '1973-74',
+  N: '1974-75', P: '1975-76', R: '1976-77', S: '1977-78', T: '1978-79', V: '1979-80',
+  W: '1980-81', X: '1981-82', Y: '1982-83',
+};
+
+function officeFor(tag) {
+  const entry = AREAS[tag[0]];
+  if (!entry) return null;
+  const office = entry.offices.find(([from, to]) => tag >= from && tag <= to);
+  return { area: entry.area, office: office ? office[2] : entry.offices[0][2] };
+}
+
+/**
+ * Read everything the plate itself can tell us — no network required.
+ */
+export function decodePlate(plate) {
+  const key = plateKey(plate);
+  const out = { plate: formatPlate(key), plateKey: key, valid: key.length >= 2 && key.length <= 8 };
+  if (!out.valid) {
+    out.scheme = 'unknown';
+    out.note = 'Not a recognised registration format — enter the details by hand.';
+    return out;
+  }
+
+  let m;
+  if ((m = key.match(/^([A-Z]{2})(\d{2})([A-Z]{3})$/))) {
+    const [, tag, ageStr] = m;
+    const age = Number(ageStr);
+    const half = age >= 50;
+    const year = 2000 + (half ? age - 50 : age);
+    out.scheme = 'uk-current';
+    out.ageIdentifier = ageStr;
+    out.year = year;
+    out.registeredFrom = half ? `${year}-09-01` : `${year}-03-01`;
+    out.registeredTo = half ? `${year + 1}-02-28` : `${year}-08-31`;
+    out.registrationPeriod = half
+      ? `September ${year} – February ${year + 1}`
+      : `March – August ${year}`;
+    const office = officeFor(tag);
+    if (office) {
+      out.region = office.area;
+      out.issuedAt = office.office;
+    }
+    out.note = `${out.registrationPeriod} plate${office ? `, issued in ${office.office}` : ''}.`;
+    return out;
+  }
+
+  if ((m = key.match(/^([A-Z])(\d{1,3})([A-Z]{3})$/)) && PREFIX_YEARS[m[1]]) {
+    out.scheme = 'uk-prefix';
+    out.registrationPeriod = PREFIX_YEARS[m[1]];
+    out.year = Number(String(PREFIX_YEARS[m[1]]).slice(0, 4));
+    out.note = `Prefix plate — first registered ${out.registrationPeriod}.`;
+    return out;
+  }
+
+  if ((m = key.match(/^([A-Z]{3})(\d{1,3})([A-Z])$/)) && SUFFIX_YEARS[m[3]]) {
+    out.scheme = 'uk-suffix';
+    out.registrationPeriod = SUFFIX_YEARS[m[3]];
+    out.year = Number(String(SUFFIX_YEARS[m[3]]).slice(0, 4));
+    out.note = `Suffix plate — first registered ${out.registrationPeriod}. Classic-era vehicle.`;
+    return out;
+  }
+
+  if (/^[A-Z]{1,3}\d{1,4}$/.test(key) || /^\d{1,4}[A-Z]{1,3}$/.test(key)) {
+    out.scheme = /[IZ]/.test(key) ? 'northern-ireland' : 'dateless';
+    out.note = out.scheme === 'northern-ireland'
+      ? 'Northern Ireland style plate — these carry no age identifier.'
+      : 'Dateless or private plate — the year cannot be read from the registration.';
+    return out;
+  }
+
+  out.scheme = 'other';
+  out.note = 'Non-UK or personalised plate — add the details manually and they will be saved.';
+  return out;
+}
+
+const FUEL_MAP = {
+  PETROL: 'Petrol', DIESEL: 'Diesel', ELECTRICITY: 'Electric', ELECTRIC: 'Electric',
+  'HYBRID ELECTRIC': 'Hybrid', 'HYBRID ELECTRIC (CLEAN)': 'Hybrid', GAS: 'LPG',
+  'GAS BI-FUEL': 'Bi-fuel', 'GAS DIESEL': 'Bi-fuel',
+};
+
+function titleCase(value) {
+  if (!value) return null;
+  return String(value)
+    .toLowerCase()
+    .replace(/\b([a-z])/g, (c) => c.toUpperCase())
+    .replace(/\bBmw\b/, 'BMW')
+    .replace(/\bMg\b/, 'MG')
+    .replace(/\bDs\b/, 'DS')
+    .replace(/\bGmc\b/, 'GMC');
+}
+
+/** DVLA Vehicle Enquiry Service — needs a free API key in DVLA_API_KEY. */
+async function fetchDvla(key, apiKey) {
+  const res = await fetch('https://driver-vehicle-licensing.api.gov.uk/vehicle-enquiry/v1/vehicles', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-api-key': apiKey },
+    body: JSON.stringify({ registrationNumber: key }),
+  });
+  if (!res.ok) {
+    if (res.status === 404) return { notFound: true };
+    throw new Error(`DVLA responded ${res.status}`);
+  }
+  const d = await res.json();
+  const firstReg = d.monthOfFirstRegistration ? `${d.monthOfFirstRegistration}-01` : null;
+  return {
+    data: {
+      make: titleCase(d.make),
+      colour: titleCase(d.colour),
+      fuel: FUEL_MAP[String(d.fuelType || '').toUpperCase()] || titleCase(d.fuelType),
+      year: d.yearOfManufacture || null,
+      engineCc: d.engineCapacity || null,
+      co2: d.co2Emissions ?? null,
+      motExpiry: d.motExpiryDate || null,
+      motStatus: d.motStatus || null,
+      taxStatus: d.taxStatus || null,
+      taxDue: d.taxDueDate || null,
+      firstRegistered: firstReg,
+      wheelplan: titleCase(d.wheelplan),
+      typeApproval: d.typeApproval || null,
+      exported: d.markedForExport || false,
+    },
+    source: 'DVLA',
+  };
+}
+
+/** Any other provider: LOOKUP_URL with {plate}, key sent in LOOKUP_HEADER. */
+async function fetchGeneric(key, env) {
+  const url = env.LOOKUP_URL.replace('{plate}', encodeURIComponent(key));
+  const headers = { accept: 'application/json' };
+  if (env.LOOKUP_KEY) headers[env.LOOKUP_HEADER || 'x-api-key'] = env.LOOKUP_KEY;
+  const res = await fetch(url, { headers });
+  if (!res.ok) throw new Error(`Lookup provider responded ${res.status}`);
+  const raw = await res.json();
+  // Providers nest their payload differently; look one level down too.
+  const d = raw.vehicle || raw.data || raw.Response || raw.result || raw;
+  const pick = (...names) => {
+    for (const n of names) {
+      for (const candidate of [n, n.toLowerCase(), n.toUpperCase()]) {
+        if (d && d[candidate] !== undefined && d[candidate] !== null && d[candidate] !== '') return d[candidate];
+      }
+    }
+    return null;
+  };
+  return {
+    data: {
+      make: titleCase(pick('make', 'Make', 'manufacturer')),
+      model: titleCase(pick('model', 'Model', 'range')),
+      variant: titleCase(pick('variant', 'trim', 'derivative')),
+      year: Number(pick('year', 'yearOfManufacture', 'manufactureYear')) || null,
+      colour: titleCase(pick('colour', 'color')),
+      fuel: titleCase(pick('fuel', 'fuelType')),
+      transmission: titleCase(pick('transmission', 'transmissionType')),
+      body: titleCase(pick('body', 'bodyStyle', 'bodyType')),
+      engineCc: Number(pick('engineCc', 'engineCapacity', 'engineSize')) || null,
+      doors: Number(pick('doors', 'numberOfDoors')) || null,
+      seats: Number(pick('seats', 'numberOfSeats')) || null,
+      co2: Number(pick('co2', 'co2Emissions')) ?? null,
+      vin: pick('vin', 'VIN', 'chassisNumber'),
+      motExpiry: pick('motExpiry', 'motExpiryDate'),
+      taxDue: pick('taxDue', 'taxDueDate'),
+    },
+    source: env.LOOKUP_NAME || 'Provider',
+  };
+}
+
+/** NHTSA vPIC — free, keyless, worldwide VIN decoding. */
+export async function decodeVin(vin) {
+  const clean = String(vin || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  if (clean.length !== 17) return null;
+  const res = await fetch(
+    `https://vpic.nhtsa.dot.gov/api/vehicles/DecodeVinValues/${clean}?format=json`,
+    { headers: { accept: 'application/json' } },
+  );
+  if (!res.ok) throw new Error(`VIN service responded ${res.status}`);
+  const json = await res.json();
+  const r = (json.Results && json.Results[0]) || {};
+  if (!r.Make && !r.Model) return null;
+  const trans = r.TransmissionStyle || '';
+  return {
+    vin: clean,
+    make: titleCase(r.Make),
+    model: titleCase(r.Model),
+    variant: titleCase(r.Trim || r.Series || null),
+    year: Number(r.ModelYear) || null,
+    body: titleCase(r.BodyClass),
+    fuel: titleCase(r.FuelTypePrimary),
+    transmission: /manual/i.test(trans) ? 'Manual' : /auto|cvt|dct/i.test(trans) ? 'Automatic' : titleCase(trans) || null,
+    engineCc: r.DisplayCC ? Math.round(Number(r.DisplayCC)) : null,
+    doors: Number(r.Doors) || null,
+    seats: Number(r.Seats) || null,
+    plant: [r.PlantCity, r.PlantCountry].filter(Boolean).join(', ') || null,
+  };
+}
+
+const CACHE_DAYS = 30;
+
+/**
+ * Identify a vehicle from its plate (and optionally a VIN).
+ * Returns { plate, fields, decoded, source, sources[], cached }.
+ */
+export async function identify(env, plateInput, vinInput) {
+  const key = plateKey(plateInput);
+  const decoded = decodePlate(key);
+  const fields = {};
+  const sources = [];
+  let cached = false;
+
+  if (decoded.year) fields.year = decoded.year;
+  if (decoded.registeredFrom) fields.firstRegistered = decoded.registeredFrom;
+  if (decoded.region) fields.region = decoded.issuedAt ? `${decoded.region} (${decoded.issuedAt})` : decoded.region;
+  if (decoded.scheme.startsWith('uk')) sources.push('Plate decoder');
+
+  // A cached provider hit avoids paying for the same plate twice.
+  let providerResult = null;
+  if (key) {
+    try {
+      const row = await env.DB.prepare(
+        'SELECT payload, source, fetched_at FROM plate_cache WHERE plate_key = ?',
+      ).bind(key).first();
+      if (row) {
+        const age = (Date.now() - Date.parse(row.fetched_at)) / 86400000;
+        if (age < CACHE_DAYS) {
+          providerResult = { data: JSON.parse(row.payload), source: row.source };
+          cached = true;
+        }
+      }
+    } catch { /* cache is best-effort */ }
+  }
+
+  if (!providerResult && key) {
+    try {
+      if (env.LOOKUP_URL) providerResult = await fetchGeneric(key, env);
+      else if (env.DVLA_API_KEY) providerResult = await fetchDvla(key, env.DVLA_API_KEY);
+    } catch (err) {
+      sources.push(`Lookup unavailable (${err.message})`);
+    }
+    if (providerResult && providerResult.data) {
+      try {
+        await env.DB.prepare(
+          `INSERT INTO plate_cache (plate_key, payload, source, fetched_at) VALUES (?, ?, ?, ?)
+           ON CONFLICT(plate_key) DO UPDATE SET payload = excluded.payload, source = excluded.source, fetched_at = excluded.fetched_at`,
+        ).bind(key, JSON.stringify(providerResult.data), providerResult.source, new Date().toISOString()).run();
+      } catch { /* cache is best-effort */ }
+    }
+  }
+
+  if (providerResult && providerResult.notFound) {
+    sources.push('Not held by DVLA');
+  } else if (providerResult && providerResult.data) {
+    Object.assign(fields, clean(providerResult.data));
+    sources.push(cached ? `${providerResult.source} (cached)` : providerResult.source);
+  }
+
+  const vin = vinInput || fields.vin;
+  if (vin) {
+    try {
+      const vinData = await decodeVin(vin);
+      if (vinData) {
+        // VIN fills the gaps — notably model and trim, which DVLA does not hold.
+        for (const [k, v] of Object.entries(clean(vinData))) {
+          if (fields[k] === undefined || fields[k] === null || fields[k] === '') fields[k] = v;
+        }
+        sources.push('NHTSA VIN database');
+      }
+    } catch (err) {
+      sources.push(`VIN decode unavailable (${err.message})`);
+    }
+  }
+
+  return {
+    plate: formatPlate(key),
+    plateKey: key,
+    fields,
+    decoded,
+    sources,
+    cached,
+    identified: Boolean(fields.make || fields.model),
+  };
+}
+
+function clean(obj) {
+  const out = {};
+  for (const [k, v] of Object.entries(obj || {})) {
+    if (v !== null && v !== undefined && v !== '' && !Number.isNaN(v)) out[k] = v;
+  }
+  return out;
+}

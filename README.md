@@ -1,3 +1,11 @@
+This repository holds two separate projects:
+
+- **Rocket Arena** — the browser game in `index.html`, documented below.
+- **[Forecourt](forecourt/)** — stock, enquiry and collection tracking for car dealerships,
+  running on Cloudflare Workers + D1. See [`forecourt/README.md`](forecourt/README.md).
+
+---
+
 # Rocket Arena
 
 Rocket-powered car soccer for the browser — a Rocket League–style game that runs on a phone.

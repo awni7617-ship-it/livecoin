@@ -1,0 +1,17 @@
+{
+  "name": "forecourt",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Forecourt — vehicle stock, enquiry and collection tracking for car dealerships. Runs on Cloudflare Workers + D1.",
+  "scripts": {
+    "setup": "node scripts/setup.mjs",
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "db:schema": "wrangler d1 execute forecourt --remote --file=./schema.sql",
+    "db:schema:local": "wrangler d1 execute forecourt --local --file=./schema.sql",
+    "tail": "wrangler tail"
+  },
+  "devDependencies": {
+    "wrangler": "^4.0.0"
+  }
+}
