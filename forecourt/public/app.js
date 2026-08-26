@@ -105,6 +105,9 @@ function toast(message, kind = '') {
 /* ---------------------------------------------------------------- api */
 
 async function api(path, { method = 'GET', body } = {}) {
+  // The standalone build swaps the server for a local store; the deployed app
+  // never sets this and goes straight to the Worker.
+  if (globalThis.FORECOURT_LOCAL) return globalThis.FORECOURT_LOCAL(path, { method, body });
   const res = await fetch(`/api${path}`, {
     method,
     headers: body ? { 'content-type': 'application/json' } : {},
@@ -284,10 +287,12 @@ function setupAuth() {
       state.user = res.user;
       enterApp(mode === 'signup');
     } catch (err) {
+      // applyMode() resets the button label and clears any old error, so it has
+      // to run before the new one is shown.
+      applyMode();
       errorBox.textContent = err.message;
       errorBox.hidden = false;
       btn.disabled = false;
-      applyMode();
     }
   });
 
@@ -298,9 +303,13 @@ function setupAuth() {
 
 async function boot() {
   setupAuth();
-  const savedTheme = localStorage.getItem('fc-theme');
+  // A theme this viewer picked wins; otherwise leave whatever the page was
+  // served with — the stylesheet already follows the system setting.
+  let savedTheme = null;
+  try {
+    savedTheme = localStorage.getItem('fc-theme');
+  } catch { /* storage can be blocked; the CSS default still applies */ }
   if (savedTheme) document.documentElement.dataset.theme = savedTheme;
-  else if (window.matchMedia('(prefers-color-scheme: dark)').matches) document.documentElement.dataset.theme = 'dark';
 
   try {
     const res = await api('/me');
@@ -1811,9 +1820,14 @@ function renderSettings() {
 /* ---------------------------------------------------------------- chrome */
 
 function toggleTheme() {
-  const next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+  const isDark = document.documentElement.dataset.theme
+    ? document.documentElement.dataset.theme === 'dark'
+    : window.matchMedia('(prefers-color-scheme: dark)').matches;
+  const next = isDark ? 'light' : 'dark';
   document.documentElement.dataset.theme = next;
-  localStorage.setItem('fc-theme', next);
+  try {
+    localStorage.setItem('fc-theme', next);
+  } catch { /* the choice just will not stick */ }
 }
 
 $('#theme-toggle').addEventListener('click', toggleTheme);

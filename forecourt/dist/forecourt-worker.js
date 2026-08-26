@@ -1909,7 +1909,7 @@ var src_default = {
 // .bundle-entry.mjs
 var ASSETS = {
   "/": { body: `<!doctype html>
-<html lang="en" data-theme="light">
+<html lang="en">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
@@ -2172,6 +2172,9 @@ function toast(message, kind = '') {
 /* ---------------------------------------------------------------- api */
 
 async function api(path, { method = 'GET', body } = {}) {
+  // The standalone build swaps the server for a local store; the deployed app
+  // never sets this and goes straight to the Worker.
+  if (globalThis.FORECOURT_LOCAL) return globalThis.FORECOURT_LOCAL(path, { method, body });
   const res = await fetch(\`/api\${path}\`, {
     method,
     headers: body ? { 'content-type': 'application/json' } : {},
@@ -2351,10 +2354,12 @@ function setupAuth() {
       state.user = res.user;
       enterApp(mode === 'signup');
     } catch (err) {
+      // applyMode() resets the button label and clears any old error, so it has
+      // to run before the new one is shown.
+      applyMode();
       errorBox.textContent = err.message;
       errorBox.hidden = false;
       btn.disabled = false;
-      applyMode();
     }
   });
 
@@ -2365,9 +2370,13 @@ function setupAuth() {
 
 async function boot() {
   setupAuth();
-  const savedTheme = localStorage.getItem('fc-theme');
+  // A theme this viewer picked wins; otherwise leave whatever the page was
+  // served with — the stylesheet already follows the system setting.
+  let savedTheme = null;
+  try {
+    savedTheme = localStorage.getItem('fc-theme');
+  } catch { /* storage can be blocked; the CSS default still applies */ }
   if (savedTheme) document.documentElement.dataset.theme = savedTheme;
-  else if (window.matchMedia('(prefers-color-scheme: dark)').matches) document.documentElement.dataset.theme = 'dark';
 
   try {
     const res = await api('/me');
@@ -3878,9 +3887,14 @@ function renderSettings() {
 /* ---------------------------------------------------------------- chrome */
 
 function toggleTheme() {
-  const next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+  const isDark = document.documentElement.dataset.theme
+    ? document.documentElement.dataset.theme === 'dark'
+    : window.matchMedia('(prefers-color-scheme: dark)').matches;
+  const next = isDark ? 'light' : 'dark';
   document.documentElement.dataset.theme = next;
-  localStorage.setItem('fc-theme', next);
+  try {
+    localStorage.setItem('fc-theme', next);
+  } catch { /* the choice just will not stick */ }
 }
 
 $('#theme-toggle').addEventListener('click', toggleTheme);
@@ -3936,6 +3950,8 @@ boot();
   --warn-soft:     #fdf1dd;
   --bad:           #d64545;
   --bad-soft:      #fdecec;
+  --violet:        #6d3ee0;
+  --violet-soft:   #ede9fe;
 
   --radius:        14px;
   --radius-sm:     10px;
@@ -3950,7 +3966,43 @@ boot();
   --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 }
 
-html[data-theme="dark"] {
+/* Dark tokens are defined twice on purpose, and must stay in step:
+   once for a viewer whose system asks for dark and who has made no explicit
+   choice, and once for an explicit choice (our own toggle, or a host page that
+   stamps the root). Without the first, a dark-mode viewer sees a flash of light
+   — or stays light entirely — before any script runs. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg:            #0b0f17;
+    --surface:       #141a25;
+    --surface-2:     #182030;
+    --surface-sunk:  #0f1520;
+    --line:          #232c3b;
+    --line-strong:   #33405a;
+    --ink:           #eef2f8;
+    --ink-2:         #c3ccda;
+    --muted:         #8b97a8;
+    --faint:         #6c7889;
+
+    --brand:         #6d8cff;
+    --brand-ink:     #93a9ff;
+    --brand-soft:    #1b2444;
+    --good:          #35c98b;
+    --good-soft:     #10261e;
+    --warn:          #e0a23c;
+    --warn-soft:     #2a2113;
+    --bad:           #ff6b6b;
+    --bad-soft:      #2c1618;
+    --violet:        #b39bff;
+    --violet-soft:   #241d45;
+
+    --shadow-sm:     0 1px 2px rgba(0, 0, 0, .5);
+    --shadow:        0 6px 18px rgba(0, 0, 0, .45);
+    --shadow-lg:     0 30px 70px rgba(0, 0, 0, .6);
+  }
+}
+
+html[data-theme="dark"], :root[data-theme="dark"] {
   --bg:            #0b0f17;
   --surface:       #141a25;
   --surface-2:     #182030;
@@ -3971,6 +4023,8 @@ html[data-theme="dark"] {
   --warn-soft:     #2a2113;
   --bad:           #ff6b6b;
   --bad-soft:      #2c1618;
+  --violet:        #b39bff;
+  --violet-soft:   #241d45;
 
   --shadow-sm:     0 1px 2px rgba(0, 0, 0, .5);
   --shadow:        0 6px 18px rgba(0, 0, 0, .45);
@@ -4314,9 +4368,8 @@ select {
 .ev.viewing   { background: var(--brand-soft); color: var(--brand-ink); }
 .ev.call      { background: var(--good-soft); color: var(--good); }
 .ev.enquiry, .ev.message { background: var(--warn-soft); color: var(--warn); }
-.ev.test_drive { background: #ede9fe; color: #6d3ee0; }
+.ev.test_drive { background: var(--violet-soft); color: var(--violet); }
 .ev.offer     { background: var(--bad-soft); color: var(--bad); }
-html[data-theme="dark"] .ev.test_drive { background: #241d45; color: #b39bff; }
 
 .empty {
   display: grid; gap: 10px; justify-items: center; text-align: center;
