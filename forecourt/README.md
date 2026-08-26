@@ -9,6 +9,22 @@ No servers, no build step, no dependencies at runtime.
 
 ---
 
+## Deploy it with no Git and no terminal
+
+`dist/forecourt-worker.js` is the entire app — Worker and front end — in one file. Nothing to
+install, nothing to connect.
+
+1. **dash.cloudflare.com** → **Compute (Workers)** → **Create** → **Start with Hello World** →
+   name it `forecourt-app` → **Deploy**.
+2. **Edit code**. Select everything in the editor, delete it, paste in the contents of
+   `dist/forecourt-worker.js`, then **Deploy**.
+3. **Settings** → **Bindings** → **Add binding** → **D1 database**. Variable name `DB`, database
+   `forecourt`. Save.
+4. Open the Worker's URL and choose **New dealership**.
+
+Rebuild that file after any change with `npm run bundle`. It serves the front end from the Worker
+rather than Cloudflare's asset edge, which is marginally slower; the routes below avoid that.
+
 ## Deploy it from a phone (no terminal)
 
 The database already exists on this Cloudflare account and its id is in `wrangler.toml`, so

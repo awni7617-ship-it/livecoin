@@ -7,6 +7,7 @@
   "scripts": {
     "setup": "node scripts/setup.mjs",
     "build": "echo \"No build step — the front end is served as-is.\"",
+    "bundle": "node scripts/bundle.mjs",
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
     "db:schema": "wrangler d1 execute forecourt --remote --file=./schema.sql",
