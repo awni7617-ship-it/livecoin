@@ -9,20 +9,41 @@ No servers, no build step, no dependencies at runtime.
 
 ---
 
-## Deploy it
+## Deploy it from a phone (no terminal)
+
+The database already exists on this Cloudflare account and its id is in `wrangler.toml`, so
+deploying is a dashboard job:
+
+1. Open **dash.cloudflare.com** and sign in.
+2. **Compute (Workers)** → **Create** → **Import a repository**. Connect GitHub if asked and give
+   it access to the `livecoin` repository.
+3. Pick **awni7617-ship-it/livecoin**, then set:
+   - **Branch**: `claude/car-dealership-tracker-n4l7xz`
+   - **Root directory**: `forecourt`
+   - **Build command**: leave empty
+   - **Deploy command**: `npx wrangler deploy`
+4. **Create and deploy**. A minute later it is live at `forecourt-app.<your-subdomain>.workers.dev`.
+5. Open that address, choose **New dealership**, and make your account. On iPhone, Share →
+   **Add to Home Screen** gives it an app icon.
+
+Every later push to that branch redeploys automatically.
+
+> The Worker is named `forecourt-app` on purpose — this account already has a Worker called
+> `forecourt`, and deploying under that name would replace it.
+
+## Deploy it from a computer
 
 ```bash
 cd forecourt
 npm install
-npm run setup     # creates the D1 database and writes its id into wrangler.toml
-npm run deploy    # publishes to your Cloudflare account
+npm run deploy    # already pointed at the forecourt D1 database
 ```
 
-`npm run setup` needs you to be signed in to Cloudflare (`npx wrangler login` if you are not).
-That is the whole install: the Worker creates its own tables on first request, so there is no
-migration step to remember.
+Deploying to a **different** Cloudflare account? Run `npm run setup` first — it creates the
+database there and rewrites `wrangler.toml`. Either way the Worker creates its own tables on
+first request, so there is no migration step to remember.
 
-To try it locally first:
+To try it locally:
 
 ```bash
 npm run dev       # http://localhost:8787, with a local database
@@ -77,15 +98,19 @@ Out of the box, with no keys at all:
 - **VIN decoding** — the free, keyless NHTSA vPIC database, which is where make, model and trim
   come from when a VIN is known.
 
-For live make, colour, fuel, engine size, CO₂, MOT and tax status straight from the registration,
-add a key as a Worker secret:
+Add keys and the plate starts telling you far more. In the dashboard: your Worker → **Settings**
+→ **Variables and secrets** → **Add**, type **Secret** (or `npx wrangler secret put NAME` from a
+computer). Existing secrets cannot be read back out of Cloudflare, so copy them from wherever you
+first saved them.
 
-```bash
-npx wrangler secret put DVLA_API_KEY
-```
+| Secret | What it adds | Where it comes from |
+| --- | --- | --- |
+| `DVLA_API_KEY` | Make, colour, fuel, engine size, CO₂, MOT and tax status from the plate | Free: [DVLA Vehicle Enquiry Service](https://developer-portal.driver-vehicle-licensing.api.gov.uk/) |
+| `MOT_CLIENT_ID`, `MOT_CLIENT_SECRET`, `MOT_API_KEY` | The **model** (DVLA does not hold it) and every recorded MOT odometer reading | Free: [DVSA MOT History API](https://documentation.history.mot.api.gov.uk/) |
 
-A DVLA Vehicle Enquiry Service key is free from
-<https://developer-portal.driver-vehicle-licensing.api.gov.uk/>.
+With the MOT keys in place, adding a car also pulls its mileage history: the last recorded
+reading pre-fills the mileage field, the vehicle page charts every reading, and if a later
+reading is *lower* than an earlier one — the classic clocking signature — it says so in red.
 
 Prefer a provider you already pay for? Point Forecourt at it instead — no code changes:
 

@@ -800,6 +800,7 @@ function paintPanel(tab) {
               <div class="money-row"><span class="k">Profit</span>
                 <span class="v ${v.profit > 0 ? 'tone-good' : 'tone-bad'}">${money(v.profit)}</span></div>` : ''}
           </div>
+          ${mileageHistoryCard(v)}
           <div class="card">
             <div class="card-head"><h3>Notes</h3><span class="link" id="notes-edit">Edit</span></div>
             <p style="color:var(--muted);white-space:pre-wrap">${esc(v.notes) || 'Nothing noted yet.'}</p>
@@ -915,6 +916,31 @@ function paintPanel(tab) {
       toast('Asking price set', 'good');
     });
   }
+}
+
+/** Odometer readings from the car's MOT history — the clocking check. */
+function mileageHistoryCard(v) {
+  const h = v.lookup && v.lookup.history;
+  if (!h || !h.readings || !h.readings.length) return '';
+  const top = Math.max(...h.readings.map((r) => r.odometer));
+  return `
+    <div class="card" style="margin-bottom:14px">
+      <div class="card-head">
+        <h3>Recorded mileage</h3>
+        <span class="badge ${h.discrepancy ? 'bad' : 'good'}">${h.discrepancy ? 'check history' : 'consistent'}</span>
+      </div>
+      ${h.discrepancy ? `<p class="hint tone-bad" style="margin-bottom:10px">${esc(h.discrepancy)}</p>` : ''}
+      ${h.readings.map((r) => `
+        <div style="margin-bottom:9px">
+          <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px">
+            <span style="color:var(--muted)">${esc(dateShort(r.date))}</span>
+            <b>${numberFmt(r.odometer)} ${esc(r.unit)}</b>
+          </div>
+          <div class="bar"><span style="width:${Math.round((r.odometer / top) * 100)}%"></span></div>
+        </div>`).join('')}
+      <p class="hint" style="margin-top:10px">From the car's MOT history${
+        h.passRate !== null && h.passRate !== undefined ? ` · ${h.tests} tests, ${h.passRate}% passed first time` : ''}.</p>
+    </div>`;
 }
 
 function apptDetailRow(a) {
@@ -1204,6 +1230,12 @@ function openAddVehicle() {
                       res.decoded.issuedAt ? ` · issued in ${esc(res.decoded.issuedAt)}` : ''}</span>` : ''}
                 ${f.motExpiry ? `<span class="meta">MOT to ${esc(dateShort(f.motExpiry))}${
                   f.taxStatus ? ` · tax ${esc(f.taxStatus)}` : ''}</span>` : ''}
+                ${res.history && res.history.lastReading ? `<span class="meta">Last MOT mileage
+                  ${numberFmt(res.history.lastReading.odometer)} ${esc(res.history.lastReading.unit)}
+                  on ${esc(dateShort(res.history.lastReading.date))} · ${res.history.tests} test${res.history.tests === 1 ? '' : 's'}
+                  recorded</span>` : ''}
+                ${res.history && res.history.discrepancy
+                  ? `<span class="meta tone-bad"><b>Check this:</b> ${esc(res.history.discrepancy)}</span>` : ''}
                 <div class="source-tags">${(res.sources || []).map((s) => `<span>${esc(s)}</span>`).join('')}</div>
               </div>
               <p class="hint">${res.identified
@@ -1218,11 +1250,11 @@ function openAddVehicle() {
               plate: res.plate || plate,
               make: f.make, model: f.model, variant: f.variant, year: f.year, colour: f.colour,
               fuel: f.fuel, transmission: f.transmission, body: f.body, engine_cc: f.engineCc,
-              doors: f.doors, seats: f.seats, co2: f.co2, vin: f.vin,
+              doors: f.doors, seats: f.seats, co2: f.co2, vin: f.vin, mileage: f.mileage,
               mot_expiry: f.motExpiry, tax_status: f.taxStatus, tax_due: f.taxDue,
               first_registered: f.firstRegistered, region: f.region,
               lookupSource: (res.sources || []).join(', '),
-              lookup: f,
+              lookup: { ...f, history: res.history || null },
             });
           };
         } catch (err) {

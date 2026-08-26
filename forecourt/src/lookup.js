@@ -188,6 +188,90 @@ async function fetchDvla(key, apiKey) {
   };
 }
 
+/**
+ * DVSA MOT History API. Needs MOT_CLIENT_ID / MOT_CLIENT_SECRET / MOT_API_KEY.
+ * Worth having: it holds the model — which DVLA does not — and every odometer
+ * reading ever recorded at an MOT, so mileage can be checked against history.
+ */
+const MOT_TENANT = 'a455b827-244f-4c97-b5b4-ce5d13b4d00c';
+let motToken = null;
+
+async function motAccessToken(env) {
+  if (motToken && motToken.expires > Date.now() + 60_000) return motToken.value;
+  const tenant = env.MOT_TENANT_ID || MOT_TENANT;
+  const res = await fetch(`https://login.microsoftonline.com/${tenant}/oauth2/v2.0/token`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      grant_type: 'client_credentials',
+      client_id: env.MOT_CLIENT_ID,
+      client_secret: env.MOT_CLIENT_SECRET,
+      scope: 'https://tapi.dvsa.gov.uk/.default',
+    }),
+  });
+  if (!res.ok) throw new Error(`MOT sign-in failed (${res.status})`);
+  const json = await res.json();
+  motToken = { value: json.access_token, expires: Date.now() + (json.expires_in || 3600) * 1000 };
+  return motToken.value;
+}
+
+async function fetchMot(key, env) {
+  const token = await motAccessToken(env);
+  const res = await fetch(
+    `https://history.mot.api.gov.uk/v1/trade/vehicles/registration/${encodeURIComponent(key)}`,
+    { headers: { authorization: `Bearer ${token}`, 'x-api-key': env.MOT_API_KEY, accept: 'application/json+v6' } },
+  );
+  if (res.status === 404) return { notFound: true };
+  if (!res.ok) throw new Error(`MOT history responded ${res.status}`);
+  const v = await res.json();
+
+  const tests = (v.motTests || [])
+    .map((t) => ({
+      date: t.completedDate || '',
+      result: t.testResult || '',
+      expiry: t.expiryDate || '',
+      odometer: Number(t.odometerValue) || null,
+      unit: (t.odometerUnit || 'mi').toLowerCase().startsWith('k') ? 'km' : 'mi',
+      advisories: (t.defects || []).filter((d) => /advisory|minor/i.test(d.type || '')).length,
+      failures: (t.defects || []).filter((d) => /fail|major|dangerous/i.test(d.type || '')).length,
+    }))
+    .sort((a, b) => String(b.date).localeCompare(String(a.date)));
+
+  const withReading = tests.filter((t) => t.odometer);
+  const latest = withReading[0] || null;
+  // A reading lower than an older one is the clocking check a dealer wants.
+  let discrepancy = null;
+  for (let i = 0; i < withReading.length - 1; i++) {
+    if (withReading[i].odometer < withReading[i + 1].odometer) {
+      discrepancy = `Recorded mileage drops from ${withReading[i + 1].odometer.toLocaleString()} (${withReading[i + 1].date.slice(0, 10)}) to ${withReading[i].odometer.toLocaleString()} (${withReading[i].date.slice(0, 10)})`;
+      break;
+    }
+  }
+
+  return {
+    data: {
+      make: titleCase(v.make),
+      model: titleCase(v.model),
+      fuel: FUEL_MAP[String(v.fuelType || '').toUpperCase()] || titleCase(v.fuelType),
+      colour: titleCase(v.primaryColour),
+      engineCc: Number(v.engineSize) || null,
+      firstRegistered: (v.firstUsedDate || v.registrationDate || '').slice(0, 10) || null,
+      motExpiry: tests[0] ? tests[0].expiry : null,
+      mileage: latest ? latest.odometer : null,
+    },
+    history: {
+      lastReading: latest,
+      readings: withReading.slice(0, 6).map(({ date, odometer, unit }) => ({ date: date.slice(0, 10), odometer, unit })),
+      tests: tests.length,
+      passRate: tests.length
+        ? Math.round((tests.filter((t) => /pass/i.test(t.result)).length / tests.length) * 100)
+        : null,
+      discrepancy,
+    },
+    source: 'DVSA MOT history',
+  };
+}
+
 /** Any other provider: LOOKUP_URL with {plate}, key sent in LOOKUP_HEADER. */
 async function fetchGeneric(key, env) {
   const url = env.LOOKUP_URL.replace('{plate}', encodeURIComponent(key));
@@ -275,45 +359,73 @@ export async function identify(env, plateInput, vinInput) {
   if (decoded.region) fields.region = decoded.issuedAt ? `${decoded.region} (${decoded.issuedAt})` : decoded.region;
   if (decoded.scheme.startsWith('uk')) sources.push('Plate decoder');
 
-  // A cached provider hit avoids paying for the same plate twice.
-  let providerResult = null;
+  // A cached hit avoids paying for the same plate twice.
+  let live = null;
   if (key) {
     try {
       const row = await env.DB.prepare(
-        'SELECT payload, source, fetched_at FROM plate_cache WHERE plate_key = ?',
+        'SELECT payload, fetched_at FROM plate_cache WHERE plate_key = ?',
       ).bind(key).first();
-      if (row) {
-        const age = (Date.now() - Date.parse(row.fetched_at)) / 86400000;
-        if (age < CACHE_DAYS) {
-          providerResult = { data: JSON.parse(row.payload), source: row.source };
-          cached = true;
-        }
+      if (row && (Date.now() - Date.parse(row.fetched_at)) / 86400000 < CACHE_DAYS) {
+        live = JSON.parse(row.payload);
+        cached = true;
       }
     } catch { /* cache is best-effort */ }
   }
 
-  if (!providerResult && key) {
+  if (!live && key) {
+    live = { fields: {}, history: null, sources: [] };
+
+    // 1. The registration provider: DVLA, or whatever LOOKUP_URL points at.
     try {
-      if (env.LOOKUP_URL) providerResult = await fetchGeneric(key, env);
-      else if (env.DVLA_API_KEY) providerResult = await fetchDvla(key, env.DVLA_API_KEY);
+      const provider = env.LOOKUP_URL
+        ? await fetchGeneric(key, env)
+        : env.DVLA_API_KEY
+          ? await fetchDvla(key, env.DVLA_API_KEY)
+          : null;
+      if (provider && provider.data) {
+        Object.assign(live.fields, clean(provider.data));
+        live.sources.push(provider.source);
+      } else if (provider && provider.notFound) {
+        live.sources.push('Not held by DVLA');
+      }
     } catch (err) {
-      sources.push(`Lookup unavailable (${err.message})`);
+      live.sources.push(`Lookup unavailable (${err.message})`);
     }
-    if (providerResult && providerResult.data) {
+
+    // 2. MOT history fills what DVLA cannot: the model, and real mileage.
+    if (env.MOT_CLIENT_ID && env.MOT_CLIENT_SECRET && env.MOT_API_KEY) {
+      try {
+        const mot = await fetchMot(key, env);
+        if (mot && mot.data) {
+          for (const [k, v] of Object.entries(clean(mot.data))) {
+            if (live.fields[k] === undefined || live.fields[k] === null || live.fields[k] === '') {
+              live.fields[k] = v;
+            }
+          }
+          live.history = mot.history;
+          live.sources.push(mot.source);
+        } else if (mot && mot.notFound) {
+          live.sources.push('No MOT history');
+        }
+      } catch (err) {
+        live.sources.push(`MOT history unavailable (${err.message})`);
+      }
+    }
+
+    if (live.sources.length) {
       try {
         await env.DB.prepare(
           `INSERT INTO plate_cache (plate_key, payload, source, fetched_at) VALUES (?, ?, ?, ?)
            ON CONFLICT(plate_key) DO UPDATE SET payload = excluded.payload, source = excluded.source, fetched_at = excluded.fetched_at`,
-        ).bind(key, JSON.stringify(providerResult.data), providerResult.source, new Date().toISOString()).run();
+        ).bind(key, JSON.stringify(live), live.sources[0], new Date().toISOString()).run();
       } catch { /* cache is best-effort */ }
     }
   }
 
-  if (providerResult && providerResult.notFound) {
-    sources.push('Not held by DVLA');
-  } else if (providerResult && providerResult.data) {
-    Object.assign(fields, clean(providerResult.data));
-    sources.push(cached ? `${providerResult.source} (cached)` : providerResult.source);
+  if (live) {
+    Object.assign(fields, live.fields || {});
+    for (const s of live.sources || []) sources.push(cached ? `${s} (cached)` : s);
   }
 
   const vin = vinInput || fields.vin;
@@ -337,6 +449,7 @@ export async function identify(env, plateInput, vinInput) {
     plateKey: key,
     fields,
     decoded,
+    history: (live && live.history) || null,
     sources,
     cached,
     identified: Boolean(fields.make || fields.model),
