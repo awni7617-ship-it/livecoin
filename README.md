@@ -12,6 +12,30 @@ Open `index.html` in any browser, or serve the folder:
 npx serve .          # then open the printed URL
 ```
 
+## Online multiplayer
+
+Two players, peer to peer over WebRTC — the game has no backend, so nothing to run and
+nothing to pay for. One player hosts (they run the simulation and the bots); the other joins.
+Remaining slots on both teams fill with bots, so you can play 1v1, 2v2 or 3v3 together.
+
+**Without any server**: host presses *Host a game*, copies the invite code and sends it over
+any chat app. The other player pastes it, copies the reply code back, host presses *Connect*.
+
+**With room codes** (optional): deploy the included `worker.js` to a Cloudflare Worker and
+paste its URL into Settings → Online → Relay URL. Hosting then gives a four-letter room code
+and the other player just types it in.
+
+```bash
+npx wrangler deploy worker.js --name rocket-arena-relay --compatibility-date 2024-01-01
+```
+
+The relay only passes the two connection handshakes; all gameplay traffic goes directly
+between the players and never touches it.
+
+Netcode is host authoritative: the host simulates everything and sends ~25 snapshots a second;
+the guest sends inputs, predicts its own car locally and interpolates everyone else, correcting
+softly toward the host. Expect it to feel right on any normal connection between friends.
+
 ## Deploy to Cloudflare
 
 The whole game is one static file, so any Cloudflare static host works.
@@ -74,7 +98,8 @@ useful launch instead of a feeble hop).
   striker / keeper), saves, clears, boost management and aerials.
 - **Cars** — six chassis built from lofted superellipse cross-sections with smooth normals:
   sculpted shells, canopies, splitters, skirts, spoilers, rocket nozzles, emissive head and
-  tail lights, spoked rims, team stripes. Ten paints, five wheel finishes, six boost trails.
+  tail lights, spoked rims, wing mirrors, roof fins, grille slats, brake calipers. Ten paints,
+  seven liveries painted in your team colour, five wheel finishes, six boost trails.
 - **Stadium** — the octagonal 8192 × 10240 × 2044 pitch with rounded floor-to-wall transitions
   and goal tunnels, wrapped in a real seating bowl: twelve stepped rows of spectators with
   stairways between blocks, home ends in team colours, a front rail and a closed back wall.
@@ -97,6 +122,9 @@ useful launch instead of a feeble hop).
   vibration), audio, and quality with adaptive resolution.
 
 ## Notes
+
+- Online play needs WebRTC. It works from the deployed site; some sandboxed previews block
+  peer connections, and a relay URL needs the page to be able to reach it.
 
 - Requires WebGL; the page shows a plain message if it is unavailable.
 - Settings, car build and career stats persist in `localStorage`.

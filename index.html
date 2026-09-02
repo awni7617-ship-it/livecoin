@@ -93,6 +93,12 @@ input[type=range]::-moz-range-thumb{width:20px;height:20px;border:0;background:v
 .val{font-family:var(--mono);font-size:12px;color:var(--boost);min-width:44px;text-align:right}
 .note{font-size:12.5px;line-height:1.6;color:var(--mute)}
 .note b{color:var(--chalk)}
+textarea,input[type=text]{width:100%;background:#0A1117;color:var(--chalk);border:1px solid var(--line);
+  font-family:var(--mono);font-size:11px;padding:8px;resize:none}
+textarea{height:74px;word-break:break-all}
+.netrow{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.room{font-family:var(--mono);font-size:clamp(26px,7vw,44px);font-weight:700;letter-spacing:.22em;
+  color:var(--boost);text-align:center;padding:6px 0}
 kbd{font-family:var(--mono);font-size:11px;background:#0C141B;border:1px solid var(--line);padding:1px 5px}
 .two{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 @media (max-width:620px){.two{grid-template-columns:1fr}}
@@ -285,6 +291,7 @@ body.portrait #rotate{display:grid}
       <div class="brand"><b>ROCKET <em>ARENA</em></b><span id="menuTag">Car soccer · 1v1 to 3v3</span></div>
       <div class="rail" style="width:min(360px,86vw)">
         <button class="btn primary cham" id="mPlay">Play match<small id="mPlayTag">3v3 · pro</small></button>
+        <button class="btn cham" id="mOnline">Online<small>play a friend</small></button>
         <button class="btn cham" id="mFree">Free play<small>no clock</small></button>
         <button class="btn cham" id="mGarage">Garage<small>car &amp; colors</small></button>
         <button class="btn cham" id="mSettings">Settings<small>camera · controls</small></button>
@@ -309,12 +316,21 @@ body.portrait #rotate{display:grid}
     </div>
   </div>
 
+  <div class="screen" id="scOnline">
+    <div class="wrap">
+      <div class="head"><h2>Online</h2><button class="btn cham ghost" data-back>Back</button></div>
+      <div class="card cham scrolly" id="onlineBody"></div>
+      <p class="note" id="netStatusLine">Status: <b id="netStatus">idle</b></p>
+    </div>
+  </div>
+
   <div class="screen" id="scGarage">
     <div class="wrap garagewrap">
       <div class="head"><h2>Garage</h2><button class="btn cham ghost" data-back>Back</button></div>
       <div class="card cham scrolly">
         <div class="field" style="margin-bottom:12px"><label>Chassis</label><div class="opts" id="optBody"></div></div>
         <div class="field" style="margin-bottom:12px"><label>Paint</label><div class="opts" id="optPaint"></div></div>
+        <div class="field" style="margin-bottom:12px"><label>Livery</label><div class="opts" id="optLivery"></div></div>
         <div class="field" style="margin-bottom:12px"><label>Wheels</label><div class="opts" id="optWheel"></div></div>
         <div class="field"><label>Boost trail</label><div class="opts" id="optBoostCol"></div></div>
       </div>
@@ -506,7 +522,8 @@ const DEFAULTS = {
     ballCam: 1, sens: 1.0, quality: 'auto', vol: 0.8, sfx: 1, crowd: 1, touch: 'auto', deadzone: .14,
     lefty: 0, btnSize: 'med', autoThrottle: 0, vibrate: 1, showFps: 0, invertPitch: 0
   },
-  car: { body: 0, paint: 4, wheel: 0, boost: 0 },
+  car: { body: 0, paint: 4, wheel: 0, boost: 0, livery: 0 },
+  name: '',
   play: { size: 3, diff: 1, len: 5, team: 0 },
   seen: 0,
   stats: { matches: 0, wins: 0, goals: 0, assists: 0, saves: 0, shots: 0, demos: 0, mvp: 0, best: 0, sec: 0 }
@@ -1237,6 +1254,56 @@ function makeNetTex() {
   }
   return texFromCanvas(c, true);
 }
+/* liveries: alpha decals painted over the body, tinted with your team colour.
+   The body loft's UVs run u along the car and v around the profile. */
+const LIVERIES = ['Clean', 'Stripes', 'Chevron', 'Blaze', 'Chequer', 'Hex', 'Edge'];
+function makeLiveryTex(kind) {
+  const W = 256, H = 128, { c, x } = cv2d(W, H);
+  x.clearRect(0, 0, W, H);
+  x.fillStyle = '#fff';
+  const band = (y, h) => x.fillRect(0, y, W, h);
+  if (kind === 1) { band(H * .40, H * .06); band(H * .52, H * .035); band(H * .60, H * .02); }
+  else if (kind === 2) {
+    for (let i = 0; i < 5; i++) {
+      x.beginPath();
+      const x0 = W * (.18 + i * .1);
+      x.moveTo(x0, 0); x.lineTo(x0 + 16, 0); x.lineTo(x0 - 22, H); x.lineTo(x0 - 38, H);
+      x.closePath(); x.globalAlpha = .85 - i * .12; x.fill();
+    }
+    x.globalAlpha = 1;
+  } else if (kind === 3) {
+    for (let i = 0; i < 26; i++) {
+      const y = H * (.36 + Math.sin(i * .9) * .09), w = 46 - i, h = 5 + (i % 4) * 3;
+      x.globalAlpha = clamp(1 - i / 26, .1, 1);
+      x.fillRect(W * .1 + i * 7, y, max(4, w * .5), h);
+    }
+    x.globalAlpha = 1;
+  } else if (kind === 4) {
+    for (let i = 0; i < 16; i++) for (let j = 0; j < 8; j++) {
+      if ((i + j) % 2) continue;
+      x.globalAlpha = clamp(1.15 - i / 16, .12, 1);
+      x.fillRect(i * W / 16, H * .34 + j * 5, W / 16, 5);
+    }
+    x.globalAlpha = 1;
+  } else if (kind === 5) {
+    for (let i = 0; i < 22; i++) for (let j = 0; j < 10; j++) {
+      const cx = i * 13 + (j % 2 ? 6 : 0), cy = 20 + j * 10;
+      x.globalAlpha = clamp(.9 - i / 26, .1, .9);
+      x.beginPath();
+      for (let k = 0; k < 6; k++) {
+        const a = k / 6 * TAU + PI / 6;
+        k ? x.lineTo(cx + Math.cos(a) * 4.6, cy + Math.sin(a) * 4.6)
+          : x.moveTo(cx + Math.cos(a) * 4.6, cy + Math.sin(a) * 4.6);
+      }
+      x.closePath(); x.fill();
+    }
+    x.globalAlpha = 1;
+  } else if (kind === 6) {
+    x.fillRect(0, 0, W, H * .07); x.fillRect(0, H * .93, W, H * .07);
+    x.fillRect(W * .0, H * .44, W * .3, H * .05);
+  }
+  return texFromCanvas(c, false);
+}
 /* soft round sprite used by every particle */
 function makeSpriteTex() {
   const { c, x } = cv2d(64, 64);
@@ -1726,6 +1793,7 @@ const BODIES = [
     prof: [[-1, .6, -9, 13, 2.6], [-.82, .9, -12, 17, 3.4], [-.4, 1, -13, 18, 3.8], [.05, .96, -13, 17, 3.8],
            [.5, .88, -12, 13, 3.4], [.8, .74, -11, 8, 2.8], [.94, .54, -9, 3, 2.4], [1, .32, -7, 0, 2.2]] }
 ];
+const R2 = b => b.wrad;
 function buildCarMeshes(b) {
   const body = new MeshData(), trim = new MeshData(), stripe = new MeshData(),
         glass = new MeshData(), lights = new MeshData();
@@ -1755,6 +1823,17 @@ function buildCarMeshes(b) {
     inner.transform(qid(), [-hl - 8, s * b.wid * .22, zc + 2]);
     trim.merge(n); trim.merge(inner);
   }
+  /* wing mirrors, roof fin and brake calipers */
+  for (const sm of [-1, 1]) {
+    trim.box(hl * .18, sm * (hw + 7), cz + 4, 11, 14, 5, [.12, .14, .18]);
+    trim.box(hl * .18, sm * (hw + 2), cz + 1, 5, 8, 7, [.1, .12, .15]);
+    trim.box(b.wf, sm * (b.wt - 9), zc + b.wrz, R2(b) * .5, 5, R2(b) * .9, [.3, .12, .12]);
+    trim.box(b.wr, sm * (b.wt + 2 - 9), zc + b.wrz, R2(b) * .5, 5, R2(b) * .9, [.3, .12, .12]);
+  }
+  trim.box(-hl * .5, 0, cz + cb[3] * .55, 30, 4, 8, [.1, .12, .15]);
+  /* front grille slats */
+  for (let i = 0; i < 3; i++)
+    trim.box(hl * .9, 0, zc + (2 + i * 4) * hs, 3, b.wid * (.5 - i * .06), 2.4, [.07, .08, .1]);
   /* spoiler */
   if (b.spoiler > 0) {
     const zh = zc + b.prof[1][3] * hs + 10 + b.spoiler * 8;
@@ -2958,6 +3037,7 @@ function scoreGoal(team) {
   hitStop(.12);
   screenFlash(.85, team ? [1, .55, .2] : [.3, .65, 1]);
   spawnExplosion(ball.p, team ? [1, .5, .15] : [.2, .6, 1], true);
+  if (isHost()) sendEvt({ t: 'goal', s: game.score, team, line });
   game.goalT = 0;
   setState('goal');
   replay.goalY = team ? HY : -HY;
@@ -2985,7 +3065,7 @@ function nextKickoff() {
 function endMatch() {
   setState('over');
   const w = game.score[0] === game.score[1] ? -1 : (game.score[0] > game.score[1] ? 0 : 1);
-  if (!game.statsPushed) {
+  if (!game.statsPushed && !isGuest()) {
     game.statsPushed = true;
     const S = SAVE.stats, ps = player.stat;
     S.matches++; S.goals += ps.goals; S.assists += ps.assists; S.saves += ps.saves;
@@ -2996,6 +3076,7 @@ function endMatch() {
     if (top === player) S.mvp++;
     persist();
   }
+  if (isHost()) sendEvt({ t: 'end', s: game.score, w, stats: game.cars.map(c => c.stat) });
   showResults(w);
   Audio_.quiet();
   Audio_.cheer(2.4, .8);
@@ -3036,6 +3117,416 @@ function stepPads(dt) {
         break;
       }
     }
+  }
+}
+
+/* =========================================================== networking =
+   Online play is peer to peer over WebRTC, so the game stays a single
+   static file with no backend of its own. One peer is the host: it runs the
+   whole simulation (ball, bots, scoring) and broadcasts snapshots ~25x a
+   second. The guest sends inputs, predicts its own car locally and
+   interpolates everything else, correcting softly toward the host's truth.
+
+   Signalling has two paths. Manual: copy an invite blob into any chat app
+   and paste the reply back. Or point Settings at a relay (a tiny Cloudflare
+   Worker ships alongside this file) and you get four-letter room codes. */
+const NET = {
+  mode: 'off',              /* off | host | client */
+  status: 'idle',
+  pc: null, dcState: null, dcEvt: null,
+  connected: false, peerName: '', ping: 0, lastPingSent: 0,
+  buf: [], bufMax: 12,      /* guest: snapshot history for interpolation */
+  delay: .09,               /* render remote entities this far in the past */
+  clock: 0, lastSnap: 0, snapHz: 25,
+  input: { th: 0, st: 0, py: 0, px: 0, bits: 0 },   /* host: latest guest input */
+  inputAge: 0, room: '', poll: null, sendErr: 0, bytesUp: 0, bytesDown: 0
+};
+const ICE = [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] }];
+
+const netOn = () => NET.mode !== 'off' && NET.connected;
+const isHost = () => NET.mode === 'host';
+const isGuest = () => NET.mode === 'client';
+
+/* ---- invite blobs: deflate + base64 so they survive a chat message ---- */
+async function packBlob(obj) {
+  const raw = new TextEncoder().encode(JSON.stringify(obj));
+  let bytes = raw;
+  if (window.CompressionStream) {
+    try {
+      const cs = new CompressionStream('deflate-raw');
+      const w = cs.writable.getWriter(); w.write(raw); w.close();
+      bytes = new Uint8Array(await new Response(cs.readable).arrayBuffer());
+    } catch (e) { bytes = raw; }
+  }
+  let s = '';
+  for (let i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]);
+  return (bytes === raw ? 'U' : 'Z') + btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+async function unpackBlob(str) {
+  str = (str || '').trim().replace(/\s+/g, '');
+  const tag = str[0];
+  const b64 = str.slice(1).replace(/-/g, '+').replace(/_/g, '/');
+  const bin = atob(b64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  if (tag === 'U') return JSON.parse(new TextDecoder().decode(bytes));
+  const ds = new DecompressionStream('deflate-raw');
+  const w = ds.writable.getWriter(); w.write(bytes); w.close();
+  return JSON.parse(await new Response(ds.readable).text());
+}
+function waitIce(pc) {
+  return new Promise(res => {
+    if (pc.iceGatheringState === 'complete') return res();
+    const done = () => { if (pc.iceGatheringState === 'complete') { pc.removeEventListener('icegatheringstatechange', done); res(); } };
+    pc.addEventListener('icegatheringstatechange', done);
+    setTimeout(res, 2500);        /* good enough once the host candidates are in */
+  });
+}
+function netStatus(s) {
+  NET.status = s;
+  const el = $('netStatus');
+  if (el) el.textContent = s;
+}
+function newPeer() {
+  netClose(true);
+  const pc = new RTCPeerConnection({ iceServers: ICE });
+  NET.pc = pc;
+  pc.oniceconnectionstatechange = () => {
+    if (['failed', 'disconnected', 'closed'].includes(pc.iceConnectionState) && NET.connected) netDrop();
+  };
+  return pc;
+}
+function wireChannels(dcState, dcEvt) {
+  NET.dcState = dcState; NET.dcEvt = dcEvt;
+  dcState.binaryType = 'arraybuffer';
+  dcState.onmessage = e => onNetState(e.data);
+  dcEvt.onmessage = e => onNetEvent(e.data);
+  const ready = () => {
+    if (dcState.readyState === 'open' && dcEvt.readyState === 'open' && !NET.connected) {
+      NET.connected = true;
+      netStatus('connected');
+      sendEvt({ t: 'hello', name: SAVE.name || (isHost() ? 'HOST' : 'GUEST'), car: SAVE.car });
+      feed('Opponent connected');
+      Audio_.pad(true);
+      if ($('scOnline').classList.contains('on')) buildOnline();
+    }
+  };
+  dcState.onopen = ready; dcEvt.onopen = ready;
+  dcEvt.onclose = () => { if (NET.connected) netDrop(); };
+}
+async function netHost() {
+  const pc = newPeer();
+  NET.mode = 'host';
+  netStatus('creating invite…');
+  const s = pc.createDataChannel('s', { ordered: false, maxRetransmits: 0 });
+  const e = pc.createDataChannel('e', { ordered: true });
+  wireChannels(s, e);
+  await pc.setLocalDescription(await pc.createOffer());
+  await waitIce(pc);
+  const blob = await packBlob({ k: 'o', sdp: pc.localDescription.sdp });
+  netStatus('waiting for opponent');
+  return blob;
+}
+async function netAcceptAnswer(code) {
+  const o = await unpackBlob(code);
+  if (o.k !== 'a') throw new Error('That is a host code, not a reply code');
+  await NET.pc.setRemoteDescription({ type: 'answer', sdp: o.sdp });
+  netStatus('connecting…');
+}
+async function netJoin(code) {
+  const o = await unpackBlob(code);
+  if (o.k !== 'o') throw new Error('That code is a reply, not an invite');
+  const pc = newPeer();
+  NET.mode = 'client';
+  pc.ondatachannel = ev => {
+    if (ev.channel.label === 's') NET.dcState = ev.channel;
+    else NET.dcEvt = ev.channel;
+    if (NET.dcState && NET.dcEvt) wireChannels(NET.dcState, NET.dcEvt);
+  };
+  await pc.setRemoteDescription({ type: 'offer', sdp: o.sdp });
+  await pc.setLocalDescription(await pc.createAnswer());
+  await waitIce(pc);
+  netStatus('reply code ready');
+  return await packBlob({ k: 'a', sdp: pc.localDescription.sdp });
+}
+function netClose(silent) {
+  if (NET.poll) { clearInterval(NET.poll); NET.poll = null; }
+  try { if (NET.dcState) NET.dcState.close(); } catch (e) {}
+  try { if (NET.dcEvt) NET.dcEvt.close(); } catch (e) {}
+  try { if (NET.pc) NET.pc.close(); } catch (e) {}
+  NET.pc = NET.dcState = NET.dcEvt = null;
+  NET.connected = false; NET.buf.length = 0; NET.room = '';
+  if (!silent) { NET.mode = 'off'; netStatus('idle'); }
+}
+function netDrop() {
+  if (!NET.connected && NET.mode === 'off') return;
+  feed('Opponent disconnected');
+  callout('Opponent left', 'demo');
+  netClose();
+  if (game.mode === 'online') { setTimeout(() => quitToMenu(), 900); }
+}
+function sendEvt(o) {
+  if (NET.dcEvt && NET.dcEvt.readyState === 'open') {
+    try { NET.dcEvt.send(JSON.stringify(o)); } catch (e) {}
+  }
+}
+
+/* ---- optional relay: four letter room codes ------------------------- */
+function relayURL() { return (SAVE.set.relay || '').replace(/\/+$/, ''); }
+async function relayPost(path, body) {
+  const r = await fetch(relayURL() + path, {
+    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body)
+  });
+  if (!r.ok) throw new Error('relay ' + r.status);
+  return r.json();
+}
+async function hostWithRelay() {
+  const blob = await netHost();
+  const r = await relayPost('/new', { offer: blob });
+  NET.room = r.room;
+  netStatus('room ' + r.room + ' — waiting');
+  buildOnline();
+  NET.poll = setInterval(async () => {
+    try {
+      const res = await fetch(relayURL() + '/answer?room=' + NET.room);
+      const j = await res.json();
+      if (j.answer) {
+        clearInterval(NET.poll); NET.poll = null;
+        await netAcceptAnswer(j.answer);
+      }
+    } catch (e) {}
+  }, 1500);
+  return blob;
+}
+async function joinWithRelay(room) {
+  const res = await fetch(relayURL() + '/offer?room=' + encodeURIComponent(room.toUpperCase()));
+  const j = await res.json();
+  if (!j.offer) throw new Error('No room ' + room);
+  const answer = await netJoin(j.offer);
+  await relayPost('/answer', { room: room.toUpperCase(), answer });
+  netStatus('connecting…');
+}
+
+/* ---- snapshots ------------------------------------------------------ */
+const SNAP_HEAD = 7, SNAP_BALL = 10, SNAP_CAR = 12;
+let snapArr = new Float32Array(SNAP_HEAD + SNAP_BALL + SNAP_CAR * 6);
+const STATE_CODE = { menu: 0, countdown: 1, play: 2, goal: 3, replay: 4, over: 5, paused: 6 };
+const CODE_STATE = ['menu', 'countdown', 'play', 'goal', 'replay', 'over', 'paused'];
+function sendSnapshot() {
+  if (!NET.dcState || NET.dcState.readyState !== 'open') return;
+  const n = game.cars.length;
+  const need = SNAP_HEAD + SNAP_BALL + SNAP_CAR * n;
+  if (snapArr.length !== need) snapArr = new Float32Array(need);
+  const a = snapArr;
+  a[0] = 1; a[1] = NET.clock; a[2] = STATE_CODE[game.state] === undefined ? 2 : STATE_CODE[game.state];
+  a[3] = game.clock; a[4] = game.score[0]; a[5] = game.score[1]; a[6] = game.countdown;
+  let o = SNAP_HEAD;
+  a[o++] = ball.p[0]; a[o++] = ball.p[1]; a[o++] = ball.p[2];
+  a[o++] = ball.q[0]; a[o++] = ball.q[1]; a[o++] = ball.q[2]; a[o++] = ball.q[3];
+  a[o++] = ball.v[0]; a[o++] = ball.v[1]; a[o++] = ball.v[2];
+  for (let i = 0; i < n; i++) {
+    const c = game.cars[i];
+    a[o++] = c.p[0]; a[o++] = c.p[1]; a[o++] = c.p[2];
+    a[o++] = c.q[0]; a[o++] = c.q[1]; a[o++] = c.q[2]; a[o++] = c.q[3];
+    a[o++] = c.v[0]; a[o++] = c.v[1]; a[o++] = c.v[2];
+    a[o++] = c.boost;
+    a[o++] = (c.boosting ? 1 : 0) | (c.dead > 0 ? 2 : 0) | (c.supersonic ? 4 : 0) | (c.onGround ? 8 : 0);
+  }
+  try { NET.dcState.send(a.buffer); NET.bytesUp += a.byteLength; } catch (e) { NET.sendErr++; }
+}
+function sendInput() {
+  if (!NET.dcState || NET.dcState.readyState !== 'open' || !player) return;
+  const c = player.ctrl;
+  const a = new Float32Array(7);
+  a[0] = 2; a[1] = NET.clock; a[2] = c.th; a[3] = c.st; a[4] = c.py; a[5] = c.px;
+  a[6] = (c.jump ? 1 : 0) | (c.boost ? 2 : 0) | (c.slide ? 4 : 0) |
+         (c.rollDir > 0 ? 8 : 0) | (c.rollDir < 0 ? 16 : 0);
+  try { NET.dcState.send(a.buffer); NET.bytesUp += a.byteLength; } catch (e) {}
+}
+function onNetState(data) {
+  const a = new Float32Array(data);
+  NET.bytesDown += a.byteLength;
+  if (a[0] === 1 && isGuest()) {
+    NET.buf.push({ t: performance.now() / 1000, a });
+    while (NET.buf.length > NET.bufMax) NET.buf.shift();
+  } else if (a[0] === 2 && isHost()) {
+    NET.input.th = a[2]; NET.input.st = a[3]; NET.input.py = a[4]; NET.input.px = a[5];
+    NET.input.bits = a[6]; NET.inputAge = 0;
+  }
+}
+function onNetEvent(data) {
+  let o; try { o = JSON.parse(data); } catch (e) { return; }
+  if (o.t === 'hello') {
+    NET.peerName = (o.name || 'RIVAL').toString().slice(0, 10).toUpperCase();
+    if (o.car) NET.peerCar = o.car;
+    if (isHost()) sendEvt({ t: 'hello', name: SAVE.name || 'HOST', car: SAVE.car });
+    if (netPeerCar()) applyPeerLook();
+  } else if (o.t === 'cfg' && isGuest()) {
+    startOnlineMatch(o.cfg, false);
+  } else if (o.t === 'goal') {
+    if (isGuest()) {
+      game.score[0] = o.s[0]; game.score[1] = o.s[1];
+      updateHUDStatic();
+      Audio_.goal(); camShake(1.4); screenFlash(.85, o.team ? [1, .55, .2] : [.3, .65, 1]);
+      spawnExplosion(ball.p, o.team ? [1, .5, .15] : [.2, .6, 1], true);
+      callout(o.line || 'Goal!');
+      feed(o.line || 'Goal!');
+    }
+  } else if (o.t === 'end' && isGuest()) {
+    game.score[0] = o.s[0]; game.score[1] = o.s[1];
+    if (o.stats) o.stats.forEach((st, i) => { if (game.cars[i]) game.cars[i].stat = st; });
+    const S = SAVE.stats, ps = player ? player.stat : null;
+    if (ps && !game.statsPushed) {
+      game.statsPushed = true;
+      S.matches++; S.goals += ps.goals; S.assists += ps.assists; S.saves += ps.saves;
+      S.shots += ps.shots; S.demos += ps.demos; S.sec += Math.round(game.clockRaw);
+      if (o.w === player.team) S.wins++;
+      if (ps.goals > S.best) S.best = ps.goals;
+      persist();
+    }
+    showResults(o.w);
+    setState('over');
+  } else if (o.t === 'ping') {
+    sendEvt({ t: 'pong', c: o.c });
+  } else if (o.t === 'pong') {
+    NET.ping = Math.round(performance.now() - o.c);
+  } else if (o.t === 'bye') {
+    netDrop();
+  }
+}
+function netPeerCar() { return game.cars.find(c => c.net === 'peer'); }
+function applyPeerLook() {
+  const c = netPeerCar();
+  if (c && NET.peerCar) { c.look = NET.peerCar; c.mesh = CARMESH[(NET.peerCar.body || 0) % CARMESH.length]; c.spec = c.mesh.spec; }
+  if (c) c.name = NET.peerName || 'RIVAL';
+}
+
+/* ---- match setup shared by both peers ------------------------------- */
+function startOnlineMatch(cfg, asHost) {
+  game.mode = 'online';
+  game.size = cfg.size; game.diff = cfg.diff; game.len = cfg.len * 60;
+  game.clock = game.len; game.clockRaw = 0;
+  game.score = [0, 0]; game.overtime = false; game.ending = false; game.endStart = 0;
+  game.statsPushed = false; game.goalT = 0; game.kickoffT = 0;
+  ball.shotBy = null; ball.threatTeam = -1;
+  CAR_ID = 0;
+  const cars = [];
+  const bN = NAMES_B.slice(), oN = NAMES_O.slice();
+  for (let t = 0; t < 2; t++) for (let i = 0; i < cfg.size; i++) {
+    const hostSlot = t === 0 && i === 0, guestSlot = t === 1 && i === 0;
+    const mine = asHost ? hostSlot : guestSlot;
+    const look = hostSlot ? (asHost ? SAVE.car : (NET.peerCar || SAVE.car))
+               : guestSlot ? (asHost ? (NET.peerCar || SAVE.car) : SAVE.car)
+               : (cfg.looks[t * cfg.size + i] || SAVE.car);
+    const nm = hostSlot ? (asHost ? 'YOU' : (NET.peerName || 'HOST'))
+             : guestSlot ? (asHost ? (NET.peerName || 'RIVAL') : 'YOU')
+             : (t ? oN : bN)[i];
+    const c = new Car(t, !(hostSlot || guestSlot), nm, look);
+    c.net = mine ? 'me' : (hostSlot || guestSlot) ? 'peer' : 'bot';
+    cars.push(c);
+    if (mine) player = c;
+  }
+  game.cars = cars;
+  replay.frames.length = 0;
+  placeKickoff();
+  cam.ballCam = !!SAVE.set.ballCam;
+  setState('countdown');
+  game.countdown = 3.2;
+  showScreen(null);
+  $('hud').classList.add('on');
+  $('touch').classList.toggle('on', touchMode);
+  $('tReset').style.display = 'none';
+  updateHUDStatic();
+  Audio_.resume();
+}
+function hostStartMatch() {
+  const cfg = {
+    size: SAVE.play.size, diff: SAVE.play.diff, len: SAVE.play.len,
+    looks: []
+  };
+  for (let i = 0; i < cfg.size * 2; i++)
+    cfg.looks.push({ body: rndi(BODIES.length), paint: rndi(PAINTS.length), wheel: rndi(WHEELS.length), boost: rndi(BOOSTCOL.length) });
+  sendEvt({ t: 'cfg', cfg });
+  startOnlineMatch(cfg, true);
+}
+
+/* ---- per-frame networking ------------------------------------------- */
+function netTick(dt) {
+  if (!netOn()) return;
+  NET.clock += dt;
+  if (isHost()) {
+    if (NET.clock - NET.lastSnap > 1 / NET.snapHz) { NET.lastSnap = NET.clock; sendSnapshot(); }
+    NET.inputAge += dt;
+    if (NET.inputAge > 1.5) { NET.input.th = 0; NET.input.st = 0; NET.input.bits = 0; }
+  } else {
+    sendInput();
+  }
+  if (performance.now() - NET.lastPingSent > 2000) {
+    NET.lastPingSent = performance.now();
+    sendEvt({ t: 'ping', c: performance.now() });
+  }
+}
+/* host: feed the guest's inputs into their car */
+function netApplyPeerInput(c) {
+  const i = NET.input, b = i.bits | 0;
+  c.ctrl.th = i.th; c.ctrl.st = i.st; c.ctrl.py = i.py; c.ctrl.px = i.px;
+  c.ctrl.jump = !!(b & 1); c.ctrl.boost = !!(b & 2); c.ctrl.slide = !!(b & 4);
+  c.ctrl.rollDir = (b & 8) ? 1 : (b & 16) ? -1 : 0;
+  c.ctrl.airRoll = c.ctrl.slide || c.ctrl.rollDir !== 0;
+}
+/* guest: play back the host's world, interpolated, with local prediction
+   for our own car so steering stays responsive */
+const _na = v3(), _nb = v3();
+function netApplySnapshots(dt) {
+  if (!isGuest() || NET.buf.length < 2) return;
+  const now = performance.now() / 1000 - NET.delay;
+  let hi = NET.buf.length - 1;
+  while (hi > 0 && NET.buf[hi - 1].t > now) hi--;
+  const B = NET.buf[hi], A = NET.buf[max(0, hi - 1)];
+  const span = max(1e-4, B.t - A.t);
+  const f = clamp((now - A.t) / span, 0, 1);
+  const a = A.a, b = B.a;
+  if (a.length !== b.length) return;
+  /* header: the host owns score, clock and match state */
+  const st = CODE_STATE[b[2] | 0] || 'play';
+  if (game.state !== st && st !== 'paused') {
+    setState(st);
+    if (st === 'countdown') { midText('', ''); }
+  }
+  game.clock = b[3]; game.score[0] = b[4]; game.score[1] = b[5]; game.countdown = b[6];
+  const lerpN = (i) => a[i] + (b[i] - a[i]) * f;
+  let o = SNAP_HEAD;
+  vset(ball.p, lerpN(o), lerpN(o + 1), lerpN(o + 2));
+  ball.q[0] = lerpN(o + 3); ball.q[1] = lerpN(o + 4); ball.q[2] = lerpN(o + 5); ball.q[3] = lerpN(o + 6);
+  qnorm(ball.q, ball.q);
+  vset(ball.v, b[o + 7], b[o + 8], b[o + 9]);
+  o += SNAP_BALL;
+  for (let i = 0; i < game.cars.length; i++) {
+    const c = game.cars[i], base = o + i * SNAP_CAR;
+    if (base + SNAP_CAR > b.length) break;
+    const flags = b[base + 11] | 0;
+    c.boost = b[base + 10];
+    c.boosting = !!(flags & 1); c.dead = (flags & 2) ? 1 : 0;
+    c.supersonic = !!(flags & 4); c.onGround = !!(flags & 8);
+    if (c === player) {
+      /* soft reconciliation: nudge the predicted car toward the host */
+      vset(_na, b[base], b[base + 1], b[base + 2]);
+      vsub(_nb, _na, c.p);
+      const err = vlen(_nb);
+      if (err > 900) { vcopy(c.p, _na); vset(c.v, b[base + 7], b[base + 8], b[base + 9]); }
+      else if (err > 4) {
+        vmadd(c.p, c.p, _nb, min(1, dt * 9));
+        vset(_na, b[base + 7], b[base + 8], b[base + 9]);
+        vlerp(c.v, c.v, _na, min(1, dt * 6));
+      }
+      continue;
+    }
+    vset(c.p, lerpN(base), lerpN(base + 1), lerpN(base + 2));
+    c.q[0] = lerpN(base + 3); c.q[1] = lerpN(base + 4); c.q[2] = lerpN(base + 5); c.q[3] = lerpN(base + 6);
+    qnorm(c.q, c.q);
+    vset(c.v, b[base + 7], b[base + 8], b[base + 9]);
+    c.wheelSpin += vdot(c.v, c.fwd) / max(20, c.mesh.rad) * dt;
+    if (c.boosting) spawnBoost(c);
   }
 }
 
@@ -3306,7 +3797,7 @@ function resetBall() {
 }
 
 /* =============================================================== render */
-let texPitch, texWall, texBall, texNet, texCrowd, texSprite, texRing, texJumboRef;
+let texPitch, texWall, texBall, texNet, texCrowd, texSprite, texRing, texJumboRef, texLivery = [];
 let ARENA, CARMESH = [], ballMesh, shadowMesh, padSmall, padBig, flameMesh, quadMesh;
 const viewProj = m4(), viewM = m4(), projM = m4(), _mdl = m4(), _mvp = m4(), _tmpM = m4(), _wheelM = m4();
 const lightView = m4(), lightProj = m4(), lightVP = m4();
@@ -3429,6 +3920,13 @@ function drawCar(c, shadowPass) {
   const paint = PAINTS[c.look.paint % PAINTS.length][1];
   const wcol = WHEELS[c.look.wheel % WHEELS.length][1];
   drawMesh(M.body, _mdl, paint, null, MAT.paint);
+  const liv = c.look.livery | 0;
+  if (liv > 0 && texLivery[liv]) {
+    /* decal pass over the same shell — LEQUAL depth keeps it flush */
+    gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+    drawMesh(M.body, _mdl, TEAMCOL[c.team], texLivery[liv], { e: .3, s: .9, p: 50, v: .25 });
+    gl.disable(gl.BLEND);
+  }
   drawMesh(M.trim, _mdl, [1, 1, 1], null, MAT.metal);
   drawMesh(M.glass, _mdl, [.07, .11, .16, 1], null, MAT.glass);
   drawMesh(M.stripe, _mdl, TEAMCOL[c.team], null, { e: .75, s: .5, p: 40, v: .15 });
@@ -3571,7 +4069,8 @@ function render() {
   gl.viewport(0, 0, W, H);
   gl.clearColor(FOGC[0], FOGC[1], FOGC[2], 1);
   gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-  gl.enable(gl.DEPTH_TEST); gl.enable(gl.CULL_FACE); gl.cullFace(gl.BACK); gl.disable(gl.BLEND);
+  gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LEQUAL);
+  gl.enable(gl.CULL_FACE); gl.cullFace(gl.BACK); gl.disable(gl.BLEND);
 
   const asp = W / max(1, H);
   const hfov = clamp(SAVE.set.fov + fx.fovKick, 70, 140) * PI / 180;
@@ -3712,7 +4211,7 @@ function drawRadar() {
 
 /* =================================================================== UI */
 const $ = id => document.getElementById(id);
-const SCREENS = ['scSplash', 'scMenu', 'scPlay', 'scGarage', 'scSettings', 'scStats', 'scHow', 'scPause', 'scResult'];
+const SCREENS = ['scSplash', 'scMenu', 'scPlay', 'scOnline', 'scGarage', 'scSettings', 'scStats', 'scHow', 'scPause', 'scResult'];
 function showScreen(id) {
   SCREENS.forEach(s => $(s).classList.toggle('on', s === id));
   /* drop any stale controller focus ring from the screen we just left */
@@ -3763,6 +4262,8 @@ function buildMenus() {
     v => { SAVE.car.body = v; persist(); if (player) player.mesh = CARMESH[v], player.spec = CARMESH[v].spec; });
   opts($('optPaint'), PAINTS.map((p, i) => ({ label: p[0], val: i, swatch: rgbCss(p[1]) })), () => SAVE.car.paint,
     v => { SAVE.car.paint = v; persist(); });
+  opts($('optLivery'), LIVERIES.map((n, i) => ({ label: n, val: i })), () => SAVE.car.livery | 0,
+    v => { SAVE.car.livery = v; persist(); });
   opts($('optWheel'), WHEELS.map((p, i) => ({ label: p[0], val: i, swatch: rgbCss(p[1]) })), () => SAVE.car.wheel,
     v => { SAVE.car.wheel = v; persist(); });
   opts($('optBoostCol'), BOOSTCOL.map((p, i) => ({ label: p[0], val: i, swatch: rgbCss(p[1]) })), () => SAVE.car.boost,
@@ -3831,6 +4332,17 @@ function buildSettings() {
   g.appendChild(choice('Touch controls', [{ label: 'Auto', val: 'auto' }, { label: 'On', val: 'on' }, { label: 'Off', val: 'off' }],
     () => S.touch || 'auto', v => { S.touch = v; applyTouchMode(); }));
   b.appendChild(g);
+  b.appendChild(head('Online'));
+  g = grid();
+  g.appendChild(textField('Relay URL (optional)', SAVE.set.relay || '', 'https://your-worker.workers.dev',
+    v => { SAVE.set.relay = v.trim(); persist(); }));
+  const rn = document.createElement('p');
+  rn.className = 'note';
+  rn.style.gridColumn = '1 / -1';
+  rn.textContent = 'Leave blank to swap invite codes by hand. Deploy the included worker.js to a ' +
+    'Cloudflare Worker and paste its URL here to get four letter room codes instead.';
+  g.appendChild(rn);
+  b.appendChild(g);
   b.appendChild(head('Controller' + (GP.idx >= 0 ? ' — ' + GP.name : ' — none detected')));
   g = grid();
   g.appendChild(slider('Stick deadzone', () => S.deadzone === undefined ? .14 : S.deadzone,
@@ -3876,6 +4388,164 @@ function goFullscreen() {
     (el.requestFullscreen || el.webkitRequestFullscreen || (() => {})).call(el);
     if (screen.orientation && screen.orientation.lock) screen.orientation.lock('landscape').catch(() => {});
   } else (document.exitFullscreen || document.webkitExitFullscreen || (() => {})).call(document);
+}
+function textField(label, value, ph, oninput) {
+  const w = document.createElement('div');
+  w.className = 'field';
+  w.innerHTML = '<label>' + label + '</label>';
+  const i = document.createElement('input');
+  i.type = 'text'; i.value = value || ''; i.placeholder = ph || '';
+  i.addEventListener('input', () => oninput(i.value));
+  w.appendChild(i);
+  return w;
+}
+function bigButton(text, cls, fn) {
+  const b = document.createElement('button');
+  b.className = 'btn cham ' + (cls || '');
+  b.textContent = text;
+  b.addEventListener('click', fn);
+  return b;
+}
+function codeBox(label, value, readonly) {
+  const w = document.createElement('div');
+  w.className = 'field';
+  w.innerHTML = '<label>' + label + '</label>';
+  const t = document.createElement('textarea');
+  t.value = value || '';
+  if (readonly) t.readOnly = true;
+  w.appendChild(t);
+  return { wrap: w, area: t };
+}
+function buildOnline() {
+  const b = $('onlineBody');
+  b.innerHTML = '';
+  const relay = (SAVE.set.relay || '').trim();
+  const add = el => b.appendChild(el);
+  add(textField('Your name', SAVE.name || '', 'PLAYER', v => { SAVE.name = v.slice(0, 10).toUpperCase(); persist(); }));
+
+  if (NET.connected) {
+    const p = document.createElement('p');
+    p.className = 'note';
+    p.style.margin = '10px 0';
+    p.innerHTML = 'Connected to <b>' + (NET.peerName || 'RIVAL') + '</b> · ping <b>' + NET.ping + 'ms</b>' +
+      (isHost() ? ' · you are <b>host</b> (blue)' : ' · you are <b>guest</b> (orange)');
+    add(p);
+    if (isHost()) {
+      const g = document.createElement('div');
+      g.className = 'grid';
+      g.style.margin = '10px 0';
+      const mk = (label, host, list, get, set) => {
+        const f = document.createElement('div');
+        f.className = 'field';
+        f.innerHTML = '<label>' + label + '</label>';
+        const o = document.createElement('div'); o.className = 'opts';
+        f.appendChild(o); opts(o, list, get, set); return f;
+      };
+      g.appendChild(mk('Team size', 0, [1, 2, 3].map(n => ({ label: n + 'v' + n, val: n })),
+        () => SAVE.play.size, v => { SAVE.play.size = v; persist(); }));
+      g.appendChild(mk('Bot skill', 0, DIFF.map((d, i) => ({ label: d.name, val: i })),
+        () => SAVE.play.diff, v => { SAVE.play.diff = v; persist(); }));
+      g.appendChild(mk('Length', 0, [3, 5, 8].map(n => ({ label: n + ' min', val: n })),
+        () => SAVE.play.len, v => { SAVE.play.len = v; persist(); }));
+      add(g);
+      add(bigButton('Start match', 'primary', () => { Audio_.click(); hostStartMatch(); }));
+    } else {
+      const w = document.createElement('p');
+      w.className = 'note';
+      w.textContent = 'Waiting for the host to start…';
+      add(w);
+    }
+    add(bigButton('Disconnect', 'ghost', () => { sendEvt({ t: 'bye' }); netClose(); buildOnline(); }));
+    return;
+  }
+
+  if (NET.mode === 'off') {
+    const p = document.createElement('p');
+    p.className = 'note';
+    p.style.margin = '4px 0 12px';
+    p.innerHTML = relay
+      ? 'Connected to a relay, so you just swap a four letter room code.'
+      : 'No relay set, so you swap invite codes: host copies a code into any chat app, ' +
+        'the other player pastes it and sends the reply back. Add a relay URL in Settings for room codes instead.';
+    add(p);
+    add(bigButton('Host a game', 'primary', async () => {
+      Audio_.click();
+      try {
+        if (relay) { await hostWithRelay(); }
+        else { const code = await netHost(); NET.myCode = code; }
+        buildOnline();
+      } catch (err) { netStatus('host failed: ' + err.message); buildOnline(); }
+    }));
+    add(bigButton('Join a game', '', () => { Audio_.click(); NET.mode = 'joining'; buildOnline(); }));
+    return;
+  }
+
+  if (NET.mode === 'joining') {
+    if (relay) {
+      const f = textField('Room code', '', 'ABCD', v => { NET.roomInput = v; });
+      add(f);
+      add(bigButton('Join room', 'primary', async () => {
+        Audio_.click();
+        try { netStatus('joining…'); await joinWithRelay((NET.roomInput || '').trim()); }
+        catch (err) { netStatus('join failed: ' + err.message); }
+        buildOnline();
+      }));
+    } else {
+      const inBox = codeBox('Paste the invite code you were sent', '', false);
+      add(inBox.wrap);
+      add(bigButton('Generate reply code', 'primary', async () => {
+        Audio_.click();
+        try {
+          const reply = await netJoin(inBox.area.value);
+          NET.myCode = reply;
+          buildOnline();
+        } catch (err) { netStatus('join failed: ' + err.message); }
+      }));
+    }
+    add(bigButton('Back', 'ghost', () => { netClose(); buildOnline(); }));
+    return;
+  }
+
+  /* host waiting, or guest showing its reply */
+  if (NET.room) {
+    const r = document.createElement('div');
+    r.className = 'room';
+    r.textContent = NET.room;
+    add(r);
+    const p = document.createElement('p');
+    p.className = 'note';
+    p.textContent = 'Give this room code to your opponent. Waiting for them to join…';
+    add(p);
+  } else if (NET.myCode) {
+    const box = codeBox(isHost() ? 'Send this invite code to your opponent' : 'Send this reply code back to the host',
+      NET.myCode, true);
+    add(box.wrap);
+    const row = document.createElement('div');
+    row.className = 'netrow';
+    row.style.margin = '8px 0';
+    const copy = bigButton('Copy code', 'primary', async () => {
+      try { await navigator.clipboard.writeText(NET.myCode); netStatus('code copied'); }
+      catch (e) { box.area.select(); document.execCommand && document.execCommand('copy'); netStatus('code selected — copy it'); }
+    });
+    copy.style.flex = '1';
+    row.appendChild(copy);
+    add(row);
+    if (isHost()) {
+      const inBox = codeBox('Paste their reply code here', '', false);
+      add(inBox.wrap);
+      add(bigButton('Connect', 'primary', async () => {
+        Audio_.click();
+        try { await netAcceptAnswer(inBox.area.value); }
+        catch (err) { netStatus('connect failed: ' + err.message); }
+      }));
+    } else {
+      const p = document.createElement('p');
+      p.className = 'note';
+      p.textContent = 'Once the host pastes this in, the match connects automatically.';
+      add(p);
+    }
+  }
+  add(bigButton('Cancel', 'ghost', () => { netClose(); buildOnline(); }));
 }
 function buildStats() {
   const s = SAVE.stats, b = $('statBody');
@@ -4004,6 +4674,16 @@ function respawn(c) {
 }
 function physStep(h, frozen) {
   const cars = game.cars;
+  /* A guest only simulates its own car, for responsive local prediction —
+     ball, bots and everyone else arrive as snapshots from the host. */
+  if (isGuest()) {
+    if (player && player.dead <= 0) {
+      player.step(h, frozen ? ZERO_CTRL : player.ctrl);
+      if (player.supersonic && !frozen) spawnTrail(player);
+      carBallCollide(player, h);                   /* predicted, host has the last word */
+    }
+    return;
+  }
   for (let i = 0; i < cars.length; i++) {
     const c = cars[i];
     if (c.dead > 0) { c.dead -= h; if (c.dead <= 0) respawn(c); continue; }
@@ -4029,8 +4709,11 @@ function physStep(h, frozen) {
 const ZERO_CTRL = { th: 0, st: 0, boost: false, jump: false, slide: false, airRoll: false, px: 0, py: 0, rollDir: 0 };
 function stepWorld(dt, frozen) {
   for (const c of game.cars) {
-    if (c.bot) botThink(c, dt);
-    else {
+    if (netOn() && c.net === 'peer') {
+      if (isHost()) netApplyPeerInput(c);          /* the other player drives this one */
+    } else if (c.bot) {
+      if (!isGuest()) botThink(c, dt);             /* the host owns the bots */
+    } else {
       const p = gatherPlayerInput();
       c.ctrl.th = p.th; c.ctrl.st = p.st; c.ctrl.boost = p.boost; c.ctrl.jump = p.jump;
       c.ctrl.slide = p.slide; c.ctrl.airRoll = p.airRoll; c.ctrl.px = p.px; c.ctrl.py = p.py;
@@ -4045,6 +4728,16 @@ function stepWorld(dt, frozen) {
 }
 function update(dt) {
   game.clockRaw += dt;
+  netTick(dt);
+  if (isGuest() && game.mode === 'online') {
+    netApplySnapshots(dt);                         /* the host's world is the truth */
+    if (game.state === 'play' || game.state === 'countdown')
+      stepWorld(dt, game.state === 'countdown');
+    updateCamera(dt);
+    stepParts(dt);
+    if (player) Audio_.drive(clamp(vlen(player.v) / MAXSPD, 0, 1), player.boosting, !player.onGround, dt);
+    return;
+  }
   switch (game.state) {
     case 'menu':
       if (cam.garage) break;              /* hold the scene still while you kit out the car */
@@ -4146,6 +4839,7 @@ function init() {
   texPitch = makePitchTex(); texWall = makeWallTex(); texBall = makeBallTex();
   texNet = makeNetTex(); texCrowd = makeCrowdTex();
   texSprite = makeSpriteTex(); texRing = makeRingTex();
+  texLivery = LIVERIES.map((n, i) => i ? makeLiveryTex(i) : null);
   texJumboRef = drawJumbo(0, 0, '5:00', 'ROCKET ARENA');
   ARENA = buildArena();
   CARMESH = BODIES.map(buildCarMeshes);
@@ -4186,6 +4880,7 @@ function init() {
     if (!SAVE.seen) { SAVE.seen = 1; persist(); showScreen('scHow'); }
   });
   $('mPlay').addEventListener('click', () => go('scPlay'));
+  $('mOnline').addEventListener('click', () => { Audio_.click(); buildOnline(); showScreen('scOnline'); });
   $('mFree').addEventListener('click', () => { Audio_.click(); startMatch('free'); $('tReset').style.display = 'grid'; });
   $('mGarage').addEventListener('click', () => go('scGarage'));
   $('mSettings').addEventListener('click', () => go('scSettings'));
