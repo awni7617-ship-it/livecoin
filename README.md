@@ -96,10 +96,15 @@ useful launch instead of a feeble hop).
   (6 big / 28 small) with respawn timers, ball spin and post/crossbar collisions.
 - **Bots** — three skill levels with intercept prediction, role rotation (first man / second
   striker / keeper), saves, clears, boost management and aerials.
-- **Cars** — six chassis built from lofted superellipse cross-sections with smooth normals:
-  sculpted shells, canopies, splitters, skirts, spoilers, rocket nozzles, emissive head and
-  tail lights, spoked rims, wing mirrors, roof fins, grille slats, brake calipers. Ten paints,
-  seven liveries painted in your team colour, five wheel finishes, six boost trails.
+- **Cars** — six original chassis (Vanguard, Longbow, Scythe, Bulwark, Cinder, Falcon) built
+  the way a car actually is: a wide lower body with fender bulges over each wheel, a narrower
+  greenhouse sitting on top so the seam reads as a shoulder line, an inset glass canopy with
+  paint pillars around it, recessed wheel arches, front bumper and splitter, grille slats,
+  side skirts, rear diffuser with exhaust tips, spoiler, mirrors, and emissive head and tail
+  lamps. Tyres are shouldered rubber on spoked rims. Paint uses a clearcoat shader — two
+  specular lobes plus an environment reflection carrying the floodlight banks, so highlights
+  sweep across the panels as the car turns. Ten paints, seven liveries in your team colour,
+  five wheel finishes, six boost trails.
 - **Stadium** — the octagonal 8192 × 10240 × 2044 pitch with rounded floor-to-wall transitions
   and goal tunnels, wrapped in a real seating bowl: twelve stepped rows of spectators with
   stairways between blocks, home ends in team colours, a front rail and a closed back wall.
@@ -122,6 +127,10 @@ useful launch instead of a feeble hop).
   vibration), audio, and quality with adaptive resolution.
 
 ## Notes
+
+- The cars, stadium and UI are original designs. The physics constants and pitch dimensions
+  match the genre's conventions, but no assets, models, names or branding are taken from any
+  commercial game.
 
 - Online play needs WebRTC. It works from the deployed site; some sandboxed previews block
   peer connections, and a relay URL needs the page to be able to reach it.

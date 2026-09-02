@@ -789,11 +789,19 @@ void main(){
   float sky = n.z * 0.5 + 0.5;
   vec3 amb = uAmb * mix(vec3(0.72, 0.76, 0.8), vec3(1.06, 1.04, 1.0), sky);
   float sp = pow(max(dot(n, normalize(uLight + vd)), 0.0), uSpecP) * uSpecI * sh;
+  /* environment: sky/ground gradient plus the floodlight banks overhead and
+     the lit ring of the bowl, so paint picks up moving highlight streaks */
   vec3 r = reflect(-vd, n);
-  vec3 env = mix(uGround, uSky, clamp(r.z * 0.5 + 0.5, 0.0, 1.0));
+  float up = clamp(r.z * 0.5 + 0.5, 0.0, 1.0);
+  vec3 env = mix(uGround, uSky, up);
+  float rig = smoothstep(0.42, 0.95, r.z) * (0.45 + 0.55 * sin(atan(r.y, r.x) * 5.0));
+  env += vec3(1.0, 0.97, 0.9) * rig * 0.9;
+  env += vec3(0.5, 0.62, 0.8) * smoothstep(0.16, 0.0, abs(r.z)) * 0.25;
   float fres = pow(1.0 - max(dot(n, vd), 0.0), 4.0);
+  /* clearcoat: a tight bright lobe on top of the broad one */
+  float sp2 = pow(max(dot(n, normalize(uLight + vd)), 0.0), uSpecP * 4.0) * uSpecI * sh;
   vec3 col = base * (amb + vec3(1.0,.97,.92) * ndl * sh + vec3(.5,.63,.82) * fill)
-           + vec3(sp) + env * (uEnvI * (0.35 + 0.65 * fres)) + base * uEmis;
+           + vec3(sp + sp2 * 0.9) + env * (uEnvI * (0.3 + 0.7 * fres)) + base * uEmis;
   float d = length(uCam - vW);
   col = mix(col, uFogC, clamp(1.0 - exp(-uFogD * d), 0.0, 1.0));
   gl_FragColor = vec4(col, a);
@@ -1765,115 +1773,175 @@ function buildArena() {
   };
 }
 
-/* ------------------------------------------------------------ car bodies */
-/* prof: lofted stations from tail to nose as [x-fraction, half-width, bottom, top, roundness] */
+/* ------------------------------------------------------------ car bodies
+   Built like an actual car rather than one smooth blob: a wide lower body
+   with fender bulges over each wheel, a narrower greenhouse sitting on top
+   (the seam between them is the shoulder line), separate glass, and the
+   bumpers, skirts, arches and lamps hung off it. Designs are our own.
+
+   low/top stations: [x fraction, half-width fraction, z bottom, z top, edge]  */
 const BODIES = [
-  { name: 'Octane', len: 118, wid: 84, hei: 36, wf: 52, wr: -44, wt: 42, wrz: -9, wrad: 15,
-    cabin: [-4, 62, .78, 27], spoiler: .5, splitter: .5,
-    prof: [[-1, .70, -12, 12, 3], [-.86, .95, -16, 22, 3.6], [-.55, 1, -17, 26, 4], [-.1, 1, -17, 27, 4],
-           [.35, .99, -16, 23, 3.8], [.72, .92, -15, 15, 3.4], [.92, .74, -13, 7, 3], [1, .5, -10, 2, 2.6]] },
-  { name: 'Dominus', len: 128, wid: 84, hei: 30, wf: 54, wr: -46, wt: 42, wrz: -7, wrad: 14,
-    cabin: [-16, 56, .72, 19], spoiler: 1, splitter: .8,
-    prof: [[-1, .74, -11, 12, 3], [-.85, .97, -14, 18, 4], [-.5, 1, -15, 20, 4.5], [-.05, 1, -15, 20, 4.5],
-           [.4, .98, -14, 17, 4], [.75, .9, -13, 11, 3.4], [.93, .7, -11, 5, 2.8], [1, .44, -9, 1, 2.4]] },
-  { name: 'Breakout', len: 131, wid: 80, hei: 30, wf: 55, wr: -47, wt: 40, wrz: -7, wrad: 14,
-    cabin: [-12, 48, .66, 19], spoiler: 1, splitter: 1,
-    prof: [[-1, .66, -10, 14, 2.8], [-.84, .92, -13, 19, 3.6], [-.45, 1, -14, 20, 4], [0, .98, -14, 19, 4],
-           [.45, .92, -13, 15, 3.6], [.78, .8, -12, 9, 3], [.94, .6, -10, 4, 2.6], [1, .36, -8, 0, 2.2]] },
-  { name: 'Merc', len: 120, wid: 90, hei: 46, wf: 50, wr: -44, wt: 44, wrz: -10, wrad: 17,
-    cabin: [2, 74, .84, 34], spoiler: 0, splitter: .3,
-    prof: [[-1, .86, -14, 22, 4], [-.8, 1, -18, 30, 5], [-.4, 1, -19, 32, 5], [.1, 1, -19, 32, 5],
-           [.5, .99, -18, 30, 5], [.8, .95, -17, 24, 4.4], [.95, .84, -15, 16, 3.6], [1, .66, -13, 8, 3]] },
-  { name: 'Fennec', len: 122, wid: 86, hei: 34, wf: 53, wr: -45, wt: 43, wrz: -8, wrad: 15,
-    cabin: [-2, 66, .8, 25], spoiler: .3, splitter: .4,
-    prof: [[-1, .8, -12, 16, 4.5], [-.85, .98, -15, 24, 5], [-.5, 1, -16, 26, 5.5], [0, 1, -16, 26, 5.5],
-           [.45, .99, -15, 24, 5], [.8, .94, -14, 17, 4], [.95, .8, -12, 9, 3.2], [1, .56, -10, 3, 2.6]] },
-  { name: 'Vector', len: 134, wid: 78, hei: 28, wf: 56, wr: -48, wt: 39, wrz: -6, wrad: 13,
-    cabin: [-18, 44, .6, 17], spoiler: 1, splitter: 1,
-    prof: [[-1, .6, -9, 13, 2.6], [-.82, .9, -12, 17, 3.4], [-.4, 1, -13, 18, 3.8], [.05, .96, -13, 17, 3.8],
-           [.5, .88, -12, 13, 3.4], [.8, .74, -11, 8, 2.8], [.94, .54, -9, 3, 2.4], [1, .32, -7, 0, 2.2]] }
+  { name: 'Vanguard', len: 118, wid: 84, hei: 36, wf: 52, wr: -44, wt: 42, wrz: -9, wrad: 15,
+    spoiler: .4, glassZ: 22,
+    low: [[-1, .70, -14, 15, 4], [-.88, .97, -16, 20, 5], [-.66, .92, -17, 21, 5.5],
+          [-.28, .90, -17, 22, 5.5], [.16, .90, -17, 22, 5.5], [.52, .97, -16, 20, 5],
+          [.80, .88, -15, 16, 4.5], [1, .60, -13, 8, 3.4]],
+    top: [[-.68, .60, 21, 33, 3.6], [-.38, .70, 21, 41, 4], [.04, .70, 21, 41, 4],
+          [.30, .60, 21, 33, 3.4], [.44, .42, 21, 25, 2.8]] },
+  { name: 'Longbow', len: 128, wid: 84, hei: 30, wf: 54, wr: -46, wt: 42, wrz: -7, wrad: 14,
+    spoiler: 1, glassZ: 17,
+    low: [[-1, .72, -12, 14, 4], [-.86, .98, -14, 17, 5], [-.6, .95, -15, 18, 5.5],
+          [-.2, .94, -15, 18, 5.5], [.24, .94, -15, 18, 5.5], [.56, .98, -14, 17, 5],
+          [.84, .84, -13, 13, 4.4], [1, .52, -11, 5, 3.2]],
+    top: [[-.74, .56, 17, 27, 3.4], [-.48, .64, 17, 34, 4], [-.08, .62, 17, 34, 4],
+          [.2, .52, 17, 26, 3.4], [.38, .36, 17, 20, 2.8]] },
+  { name: 'Scythe', len: 131, wid: 80, hei: 30, wf: 55, wr: -47, wt: 40, wrz: -7, wrad: 14,
+    spoiler: 1, glassZ: 17,
+    low: [[-1, .62, -11, 15, 3.4], [-.86, .94, -13, 18, 4.6], [-.56, .92, -14, 19, 5],
+          [-.16, .9, -14, 19, 5], [.28, .9, -14, 18, 5], [.6, .95, -13, 16, 4.6],
+          [.86, .78, -12, 11, 4], [1, .44, -10, 4, 3] ],
+    top: [[-.72, .52, 18, 28, 3.2], [-.44, .62, 18, 35, 3.8], [-.04, .60, 18, 35, 3.8],
+          [.22, .48, 18, 26, 3.2], [.38, .32, 18, 20, 2.6]] },
+  { name: 'Bulwark', len: 120, wid: 90, hei: 46, wf: 50, wr: -44, wt: 44, wrz: -10, wrad: 17,
+    spoiler: 0, glassZ: 28,
+    low: [[-1, .82, -14, 22, 5], [-.86, 1, -18, 27, 5.5], [-.6, .96, -19, 28, 6],
+          [-.2, .95, -19, 28, 6], [.24, .95, -19, 28, 6], [.6, 1, -18, 27, 5.5],
+          [.86, .9, -17, 22, 5], [1, .68, -15, 14, 4]],
+    top: [[-.72, .68, 27, 44, 4.4], [-.42, .76, 27, 52, 5], [.06, .76, 27, 52, 5],
+          [.34, .68, 27, 43, 4], [.48, .5, 27, 32, 3]] },
+  { name: 'Cinder', len: 122, wid: 86, hei: 34, wf: 53, wr: -45, wt: 43, wrz: -8, wrad: 15,
+    spoiler: .25, glassZ: 21,
+    low: [[-1, .78, -13, 17, 5], [-.88, 1, -15, 21, 6], [-.64, .96, -16, 22, 6.5],
+          [-.24, .95, -16, 23, 6.5], [.2, .95, -16, 23, 6.5], [.56, 1, -15, 21, 6],
+          [.84, .9, -14, 17, 5], [1, .66, -12, 9, 3.6]],
+    top: [[-.66, .64, 22, 34, 4.4], [-.36, .72, 22, 42, 5], [.06, .72, 22, 42, 5],
+          [.32, .62, 22, 33, 3.8], [.46, .44, 22, 25, 2.8]] },
+  { name: 'Falcon', len: 134, wid: 78, hei: 28, wf: 56, wr: -48, wt: 39, wrz: -6, wrad: 13,
+    spoiler: 1, glassZ: 15,
+    low: [[-1, .58, -10, 13, 3.2], [-.86, .92, -12, 16, 4.4], [-.54, .92, -13, 17, 4.8],
+          [-.12, .9, -13, 17, 4.8], [.3, .9, -12, 16, 4.8], [.62, .95, -12, 14, 4.4],
+          [.88, .74, -11, 9, 3.8], [1, .38, -9, 3, 2.8]],
+    top: [[-.74, .48, 16, 25, 3], [-.46, .58, 16, 32, 3.6], [-.06, .56, 16, 32, 3.6],
+          [.2, .46, 16, 24, 3], [.36, .3, 16, 18, 2.6]] }
 ];
-const R2 = b => b.wrad;
+/* fake ambient occlusion: darken whatever sits low on the body */
+function shadeAO(md, zLow, zHigh, floor) {
+  const n = md.v.length / STRIDE;
+  for (let i = 0; i < n; i++) {
+    const o = i * STRIDE;
+    const t = clamp((md.v[o + 2] - zLow) / (zHigh - zLow), 0, 1);
+    const k = floor + (1 - floor) * t;
+    md.v[o + 6] *= k; md.v[o + 7] *= k; md.v[o + 8] *= k;
+  }
+  return md;
+}
 function buildCarMeshes(b) {
   const body = new MeshData(), trim = new MeshData(), stripe = new MeshData(),
         glass = new MeshData(), lights = new MeshData();
   const hl = b.len / 2 * 1.07, hw = b.wid / 2, zc = 10, hs = b.hei / 34;
-  /* main shell */
-  body.loft(b.prof.map(p => ({ x: p[0] * hl, w: p[1] * hw, zb: zc + p[2] * hs, zt: zc + p[3] * hs, n: p[4] })),
-    [1, 1, 1], true, true);
-  /* canopy */
-  const cb = b.cabin, cz = zc + b.prof[3][3] * hs - 2;
+  const st = a => a.map(p => ({ x: p[0] * hl, w: p[1] * hw, zb: zc + p[2] * hs, zt: zc + p[3] * hs, n: p[4] }));
+  const low = st(b.low), top = st(b.top);
+  body.loft(low, [1, 1, 1], true, true);
+  /* greenhouse: pillars and roof in paint, glass goes in separately */
+  const g0 = body.v.length / STRIDE;
+  body.loft(top, [1, 1, 1], true, true);
+  /* shoulder crease: a thin dark strip along the seam of the two forms */
+  const beltZ = zc + b.glassZ * hs;
+  for (const s of [-1, 1]) trim.box(-hl * .06, s * hw * .90, beltZ - 3, b.len * .5, 2.4, 2.8, [.1, .11, .14]);
+
+  /* ---- canopy: an inset glass shell inside the greenhouse, so the paint
+     around it reads as A- and C-pillars ---- */
+  const inset = (p, kw, kz, dz) => ({ x: p.x, w: p.w * kw, zb: p.zb + 2, zt: p.zt * kz + dz, n: p.n });
   glass.loft([
-    { x: cb[0] - cb[1] * .5, w: hw * cb[2] * .74, zb: cz - 4, zt: cz + 2, n: 3 },
-    { x: cb[0] - cb[1] * .2, w: hw * cb[2], zb: cz - 4, zt: cz + cb[3] * .92, n: 3.4 },
-    { x: cb[0] + cb[1] * .18, w: hw * cb[2] * .96, zb: cz - 4, zt: cz + cb[3], n: 3.4 },
-    { x: cb[0] + cb[1] * .5, w: hw * cb[2] * .6, zb: cz - 4, zt: cz + cb[3] * .5, n: 2.8 }
+    inset(top[0], .90, 1, -3.5), inset(top[1], .92, 1, -2.5), inset(top[2], .92, 1, -2.5),
+    inset(top[3], .90, 1, -3), inset(top[4], .84, 1, -3.5)
   ], [1, 1, 1], true, true);
-  /* front splitter, side skirts, diffuser */
-  trim.box(hl * .88, 0, zc - 13 * hs, b.len * .1, b.wid * (.82 + b.splitter * .12), 5, [.09, .1, .13]);
-  for (const s of [-1, 1]) trim.box(0, s * hw * .96, zc - 12 * hs, b.len * .58, 5, 8, [.09, .1, .13]);
-  trim.box(-hl * .93, 0, zc - 9 * hs, b.len * .07, b.wid * .8, 12, [.1, .11, .14]);
+
+  /* ---- wheel arches and wells ---- */
+  const R = b.wrad;
+  for (const s of [-1, 1]) for (const wx of [b.wf, b.wr]) {
+    /* dark recess, kept inside the body so it only shows through the arch */
+    trim.box(wx, s * (hw - 16), zc + b.wrz + R * .35, R * 2.1, 13, R * 1.5, [.045, .05, .062]);
+  }
+  /* ---- bumpers, skirts, diffuser, exhausts ---- */
+  const nose = low[low.length - 1], tail = low[0];
+  trim.box(hl * .9, 0, zc - 11 * hs, b.len * .11, b.wid * .84, 9, [.09, .1, .13]);       /* front bumper */
+  trim.box(hl * .96, 0, zc - 15 * hs, b.len * .05, b.wid * .72, 5, [.07, .08, .1]);      /* splitter */
+  for (let i = 0; i < 4; i++)                                                            /* grille slats */
+    trim.box(hl * .935, 0, zc + (-4 + i * 4) * hs, 3.4, b.wid * (.46 - i * .05), 2.6, [.06, .07, .09]);
+  for (const s of [-1, 1]) {
+    trim.box(hl * .04, s * hw * .99, zc - 13 * hs, b.len * .56, 5.5, 9, [.09, .1, .13]); /* side skirt */
+    trim.box(hl * .55, s * hw * .95, zc + 3 * hs, 14, 3, 5, [.1, .11, .14]);              /* wing vent */
+    trim.box(-hl * .86, s * b.wid * .3, zc - 12 * hs, 12, 16, 9, [.16, .17, .2]);        /* exhaust box */
+    const ex = new MeshData();
+    ex.cylinder(5.2, 12, 10, [.3, .32, .36], 'x');
+    ex.transform(qid(), [-hl - 3, s * b.wid * .3, zc - 12 * hs]);
+    trim.merge(ex);
+    /* mirrors */
+    trim.box(hl * .2, s * (hw + 5), beltZ + 6, 8, 9, 4, [.11, .12, .15]);
+    trim.box(hl * .2, s * (hw + 1), beltZ + 3, 3.4, 6, 5, [.09, .1, .12]);
+  }
+  trim.box(-hl * .93, 0, zc - 12 * hs, b.len * .06, b.wid * .78, 12, [.1, .11, .14]);    /* diffuser */
+  for (let i = -2; i <= 2; i++)
+    trim.box(-hl * .95, i * b.wid * .13, zc - 13 * hs, 5, 5, 13, [.06, .07, .09]);       /* diffuser fins */
   /* rocket nozzles */
   for (const s of [-1, 1]) {
-    const n = new MeshData();
-    n.cylinder(9.5, 15, 12, [.24, .26, .3], 'x');
-    n.transform(qid(), [-hl - 3, s * b.wid * .22, zc + 2]);
-    const inner = new MeshData();
-    inner.cylinder(6.5, 4, 10, [.05, .05, .06], 'x');
-    inner.transform(qid(), [-hl - 8, s * b.wid * .22, zc + 2]);
-    trim.merge(n); trim.merge(inner);
+    const n1 = new MeshData(); n1.cylinder(9.5, 15, 12, [.26, .28, .32], 'x');
+    n1.transform(qid(), [-hl - 2, s * b.wid * .17, zc + 3 * hs]);
+    const n2 = new MeshData(); n2.cylinder(6.6, 4, 10, [.04, .04, .05], 'x');
+    n2.transform(qid(), [-hl - 7, s * b.wid * .17, zc + 3 * hs]);
+    trim.merge(n1); trim.merge(n2);
   }
-  /* wing mirrors, roof fin and brake calipers */
-  for (const sm of [-1, 1]) {
-    trim.box(hl * .18, sm * (hw + 7), cz + 4, 11, 14, 5, [.12, .14, .18]);
-    trim.box(hl * .18, sm * (hw + 2), cz + 1, 5, 8, 7, [.1, .12, .15]);
-    trim.box(b.wf, sm * (b.wt - 9), zc + b.wrz, R2(b) * .5, 5, R2(b) * .9, [.3, .12, .12]);
-    trim.box(b.wr, sm * (b.wt + 2 - 9), zc + b.wrz, R2(b) * .5, 5, R2(b) * .9, [.3, .12, .12]);
-  }
-  trim.box(-hl * .5, 0, cz + cb[3] * .55, 30, 4, 8, [.1, .12, .15]);
-  /* front grille slats */
-  for (let i = 0; i < 3; i++)
-    trim.box(hl * .9, 0, zc + (2 + i * 4) * hs, 3, b.wid * (.5 - i * .06), 2.4, [.07, .08, .1]);
-  /* spoiler */
   if (b.spoiler > 0) {
-    const zh = zc + b.prof[1][3] * hs + 10 + b.spoiler * 8;
-    trim.box(-hl * .8, 0, zh, 24, b.wid * .94, 4.5, [.11, .13, .16]);
-    for (const s of [-1, 1]) trim.box(-hl * .8, s * b.wid * .39, zh - 9, 15, 5, 18, [.11, .13, .16]);
+    const zh = zc + (b.low[0][3] + 12 + b.spoiler * 10) * hs;
+    trim.box(-hl * .82, 0, zh, 26, b.wid * .96, 4.5, [.11, .12, .15]);
+    for (const s of [-1, 1]) trim.box(-hl * .82, s * b.wid * .4, zh - 10, 16, 5, 20, [.11, .12, .15]);
   }
-  /* headlights + tail lights (drawn emissive) */
+  /* ---- lamps ---- */
   for (const s of [-1, 1]) {
-    lights.box(hl * .93, s * hw * .58, zc + 2 * hs, 4, b.wid * .2, 6, [1, 1, 1]);
-    lights.box(-hl * .95, s * hw * .55, zc + 6 * hs, 3, b.wid * .22, 5, [1, 1, 1]);
+    lights.box(hl * .915, s * hw * .58, zc + 4 * hs, 4, b.wid * .22, 7, [1, 1, 1]);
+    lights.box(-hl * .945, s * hw * .55, zc + 7 * hs, 3.5, b.wid * .24, 5.5, [1, 1, 1]);
   }
-  /* team stripes: flanks, roof flash, nose chevron */
-  for (const s of [-1, 1]) stripe.box(hl * .04, s * (hw * .99), zc + 4 * hs, b.len * .72, 2.5, 7 * hs, [1, 1, 1]);
-  stripe.box(hl * .5, 0, cz + 1, b.len * .2, b.wid * .42, 2.5, [1, 1, 1]);
-  stripe.box(-hl * .86, 0, zc + 4 * hs, 4, b.wid * .5, 8, [1, 1, 1]);
-  /* wheel: shouldered tyre + spoked rim */
-  const R = b.wrad, wheel = new MeshData();
+  /* ---- team stripes ---- */
+  for (const s of [-1, 1]) stripe.box(hl * .06, s * (hw * 1.002), beltZ - 6, b.len * .56, 2.2, 3, [1, 1, 1]);
+  stripe.box(-hl * .34, 0, top[1].zt + .8, b.len * .26, b.wid * .3, 2, [1, 1, 1]);
+  stripe.box(-hl * .9, 0, zc + 3 * hs, 4, b.wid * .46, 7, [1, 1, 1]);
+  shadeAO(body, zc - 18 * hs, zc + 26 * hs, .58);
+  shadeAO(trim, zc - 18 * hs, zc + 26 * hs, .6);
+
+  /* ---- wheel: shouldered tyre with tread, spoked rim ---- */
+  const wheel = new MeshData();
   wheel.loft([
-    { x: -6.6, w: R * .78, zb: -R * .78, zt: R * .78, n: 3 },
-    { x: -5.4, w: R, zb: -R, zt: R, n: 4.6 },
-    { x: 5.4, w: R, zb: -R, zt: R, n: 4.6 },
-    { x: 6.6, w: R * .78, zb: -R * .78, zt: R * .78, n: 3 }
-  ], [.07, .08, .1], true, true);
+    { x: -6.9, w: R * .70, zb: -R * .70, zt: R * .70, n: 2.2 },
+    { x: -6.0, w: R * .93, zb: -R * .93, zt: R * .93, n: 2.4 },
+    { x: -4.4, w: R, zb: -R, zt: R, n: 2.7 },
+    { x: 4.4, w: R, zb: -R, zt: R, n: 2.7 },
+    { x: 6.0, w: R * .93, zb: -R * .93, zt: R * .93, n: 2.4 },
+    { x: 6.9, w: R * .70, zb: -R * .70, zt: R * .70, n: 2.2 }
+  ], [1, 1, 1], true, true);
   wheel.transform(qAxis([0, 0, 0, 1], [0, 0, 1], PI / 2), [0, 0, 0]);
   const rim = new MeshData();
-  rim.cylinder(R * .58, 11.4, 14, [1, 1, 1], 'y');
-  for (let i = 0; i < 5; i++) {
+  rim.cylinder(R * .62, 11.6, 16, [1, 1, 1], 'y');                 /* barrel */
+  const lip = new MeshData();
+  lip.cylinder(R * .70, 3.2, 16, [1, 1, 1], 'y');
+  lip.transform(qid(), [0, 0, 0]);
+  rim.merge(lip);
+  for (let i = 0; i < 6; i++) {                                     /* spokes */
     const sp = new MeshData();
-    sp.box(0, 0, R * .3, R * .18, 12, R * .58, [1, 1, 1]);
-    sp.transform(qAxis([0, 0, 0, 1], [0, 1, 0], i / 5 * TAU), [0, 0, 0]);
+    sp.box(0, 0, R * .3, R * .15, 12.4, R * .6, [1, 1, 1]);
+    sp.transform(qAxis([0, 0, 0, 1], [0, 1, 0], i / 6 * TAU), [0, 0, 0]);
     rim.merge(sp);
   }
+  const hub = new MeshData();
+  hub.cylinder(R * .2, 13, 12, [1, 1, 1], 'y');
+  rim.merge(hub);
   return {
     body: mkMesh(body), trim: mkMesh(trim), stripe: mkMesh(stripe), glass: mkMesh(glass),
     lights: mkMesh(lights), wheel: mkMesh(wheel), rim: mkMesh(rim),
-    wheels: [[b.wf, b.wt, b.wrz], [b.wf, -b.wt, b.wrz], [b.wr, b.wt + 2, b.wrz], [b.wr, -b.wt - 2, b.wrz]],
+    wheels: [[b.wf, b.wt - 3, b.wrz], [b.wf, -(b.wt - 3), b.wrz], [b.wr, b.wt - 1, b.wrz], [b.wr, -(b.wt - 1), b.wrz]],
     rad: b.wrad, spec: b
   };
 }
-/* tapered cone used for the boost jet */
 function buildFlame() {
   const md = new MeshData();
   md.loft([
@@ -3928,14 +3996,14 @@ function drawCar(c, shadowPass) {
     gl.disable(gl.BLEND);
   }
   drawMesh(M.trim, _mdl, [1, 1, 1], null, MAT.metal);
-  drawMesh(M.glass, _mdl, [.07, .11, .16, 1], null, MAT.glass);
-  drawMesh(M.stripe, _mdl, TEAMCOL[c.team], null, { e: .75, s: .5, p: 40, v: .15 });
+  drawMesh(M.glass, _mdl, [.035, .05, .075, 1], null, { e: 0, s: 1.5, p: 110, v: .8 });
+  drawMesh(M.stripe, _mdl, TEAMCOL[c.team], null, { e: .5, s: .6, p: 44, v: .18 });
   drawMesh(M.lights, _mdl, c.ctrl.th < -.1 ? [1, .25, .2] : [1, .93, .8], null,
     { e: c.ctrl.th < -.1 ? 1.5 : .9, s: .4, p: 40, v: .1 });
   for (let i = 0; i < 4; i++) {
     m4rt(_tmpM, i < 2 ? c._lqF : c._lqS, M.wheels[i]);
     m4mul(_wheelM, _mdl, _tmpM);
-    drawMesh(M.wheel, _wheelM, wcol, null, MAT.rubber);
+    drawMesh(M.wheel, _wheelM, [.052, .056, .066], null, MAT.rubber);
     drawMesh(M.rim, _wheelM, wcol, null, MAT.metal);
   }
 }
